@@ -1,4 +1,5 @@
 import { Logger } from "../Logger/index.js";
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 
 export class McpInterruptError extends Error {
   public readonly isMcpInterrupt = true;
@@ -24,20 +25,7 @@ export declare namespace McpSession {
     context?: unknown;
   };
   
-  type SuccessResponse<TData> = {
-    success: true;
-    data: TData;
-    warnings?: McpSession.Warning[];
-  };
-  
-  type ErrorResponse<TData> = {
-    success: false;
-    data: TData;
-    errors: McpSession.Error[];
-    warnings?: McpSession.Warning[];
-  };
-  
-  type Response<TData> = SuccessResponse<TData> | ErrorResponse<TData>;
+
 }
 
 export class McpSession {
@@ -49,26 +37,38 @@ export class McpSession {
 
   throwError(criticalError: McpSession.Error): never {
     this.logger.addError(criticalError);
-    const response = this.getResponse({ criticalError });
+    const response = this.getResult({ criticalError });
     throw new McpInterruptError(response);
   }
 
-  getResponse<TData>(data: TData): McpSession.Response<TData> {
+  getResult<TData>(data: TData): CallToolResult {
     const { errors, warnings } = this.logger.getResponse();
     
     if (errors.length > 0) {
       return {
-        success: false,
-        data,
-        errors,
-        ...(warnings.length > 0 && { warnings })
+        content: [{
+          type: "text",
+          text: JSON.stringify({
+            success: false,
+            data,
+            errors,
+            ...(warnings.length > 0 && { warnings })
+          }, null, 2)
+        }],
+        isError: true
       };
     }
     
     return {
-      success: true,
-      data,
-      ...(warnings.length > 0 && { warnings })
+      content: [{
+        type: "text",
+        text: JSON.stringify({
+          success: true,
+          data,
+          ...(warnings.length > 0 && { warnings })
+        }, null, 2)
+      }],
+      isError: false
     };
   }
 } 

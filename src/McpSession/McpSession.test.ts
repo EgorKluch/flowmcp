@@ -40,8 +40,11 @@ describe('McpSession', () => {
       } catch (thrownError) {
         expect(thrownError).toBeInstanceOf(McpInterruptError);
         const mcpError = thrownError as McpInterruptError;
-        expect(mcpError.response.success).toBe(false);
-        expect(mcpError.response.data.criticalError).toEqual(error);
+        expect(mcpError.response.isError).toBe(true);
+        expect(mcpError.response.content[0].type).toBe('text');
+        const content = JSON.parse(mcpError.response.content[0].text as string);
+        expect(content.success).toBe(false);
+        expect(content.data.criticalError).toEqual(error);
       }
     });
 
@@ -68,44 +71,53 @@ describe('McpSession', () => {
     });
   });
 
-  describe('getResponse', () => {
-    it('should return success response when no errors', () => {
-      const result = session.getResponse('test data');
+  describe('getResult', () => {
+    it('should return success CallToolResult when no errors', () => {
+      const result = session.getResult('test data');
       
-      expect(result.success).toBe(true);
-      expect(result.data).toBe('test data');
+      expect(result.isError).toBe(false);
+      expect(result.content).toHaveLength(1);
+      expect(result.content[0].type).toBe('text');
+      const content = JSON.parse(result.content[0].text as string);
+      expect(content.success).toBe(true);
+      expect(content.data).toBe('test data');
     });
 
-    it('should return error response when errors exist', () => {
+    it('should return error CallToolResult when errors exist', () => {
       session.logger.addError({
         code: 'SESSION_ERROR',
         message: 'Session error'
       });
 
-      const result = session.getResponse('test data');
+      const result = session.getResult('test data');
       
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.data).toBe('test data');
-        expect(result.errors.length).toBe(1);
-        expect(result.errors[0].code).toBe('SESSION_ERROR');
-      }
+      expect(result.isError).toBe(true);
+      expect(result.content).toHaveLength(1);
+      expect(result.content[0].type).toBe('text');
+      const content = JSON.parse(result.content[0].text as string);
+      expect(content.success).toBe(false);
+      expect(content.data).toBe('test data');
+      expect(content.errors.length).toBe(1);
+      expect(content.errors[0].code).toBe('SESSION_ERROR');
     });
 
-    it('should include warnings in success response', () => {
+    it('should include warnings in success result', () => {
       session.logger.addWarning({
         code: 'SESSION_WARNING',
         message: 'Session warning'
       });
 
-      const result = session.getResponse('test data');
+      const result = session.getResult('test data');
       
-      expect(result.success).toBe(true);
-      expect(result.warnings?.length).toBe(1);
-      expect(result.warnings?.[0].code).toBe('SESSION_WARNING');
+      expect(result.isError).toBe(false);
+      expect(result.content).toHaveLength(1);
+      const content = JSON.parse(result.content[0].text as string);
+      expect(content.success).toBe(true);
+      expect(content.warnings?.length).toBe(1);
+      expect(content.warnings?.[0].code).toBe('SESSION_WARNING');
     });
 
-    it('should include warnings in error response', () => {
+    it('should include warnings in error result', () => {
       session.logger.addError({
         code: 'SESSION_ERROR',
         message: 'Session error'
@@ -115,40 +127,55 @@ describe('McpSession', () => {
         message: 'Session warning'
       });
 
-      const result = session.getResponse('test data');
+      const result = session.getResult('test data');
       
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.errors.length).toBe(1);
-        expect(result.warnings?.length).toBe(1);
-      }
+      expect(result.isError).toBe(true);
+      const content = JSON.parse(result.content[0].text as string);
+      expect(content.success).toBe(false);
+      expect(content.errors.length).toBe(1);
+      expect(content.warnings?.length).toBe(1);
     });
 
     it('should handle null data', () => {
-      const result = session.getResponse(null);
+      const result = session.getResult(null);
       
-      expect(result.success).toBe(true);
-      expect(result.data).toBe(null);
+      expect(result.isError).toBe(false);
+      const content = JSON.parse(result.content[0].text as string);
+      expect(content.success).toBe(true);
+      expect(content.data).toBe(null);
     });
 
     it('should handle undefined data', () => {
-      const result = session.getResponse(undefined);
+      const result = session.getResult(undefined);
       
-      expect(result.success).toBe(true);
-      expect(result.data).toBe(undefined);
+      expect(result.isError).toBe(false);
+      const content = JSON.parse(result.content[0].text as string);
+      expect(content.success).toBe(true);
+      expect(content.data).toBe(undefined);
     });
 
     it('should handle complex object data', () => {
       const complexData = {
         nested: { value: 42 },
         array: [1, 2, 3],
-        func: () => 'test'
+        string: 'test'
       };
 
-      const result = session.getResponse(complexData);
+      const result = session.getResult(complexData);
       
-      expect(result.success).toBe(true);
-      expect(result.data).toBe(complexData);
+      expect(result.isError).toBe(false);
+      const content = JSON.parse(result.content[0].text as string);
+      expect(content.success).toBe(true);
+      expect(content.data).toEqual(complexData);
+    });
+
+    it('should not include warnings when none exist', () => {
+      const result = session.getResult('test data');
+      
+      expect(result.isError).toBe(false);
+      const content = JSON.parse(result.content[0].text as string);
+      expect(content.success).toBe(true);
+      expect(content.warnings).toBeUndefined();
     });
   });
 
@@ -161,14 +188,14 @@ describe('McpSession', () => {
       };
 
       session.logger.addError(error);
-      const result = session.getResponse('test');
+      const result = session.getResult('test');
 
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.errors[0].code).toBe('TEST_ERROR');
-        expect(result.errors[0].message).toBe('Test error');
-        expect(result.errors[0].contexts).toContainEqual({ key: 'value' });
-      }
+      expect(result.isError).toBe(true);
+      const content = JSON.parse(result.content[0].text as string);
+      expect(content.success).toBe(false);
+      expect(content.errors[0].code).toBe('TEST_ERROR');
+      expect(content.errors[0].message).toBe('Test error');
+      expect(content.errors[0].contexts).toContainEqual({ key: 'value' });
     });
 
     it('should use logger for warnings', () => {
@@ -179,12 +206,14 @@ describe('McpSession', () => {
       };
 
       session.logger.addWarning(warning);
-      const result = session.getResponse('test');
+      const result = session.getResult('test');
 
-      expect(result.success).toBe(true);
-      expect(result.warnings?.[0].code).toBe('TEST_WARNING');
-      expect(result.warnings?.[0].message).toBe('Test warning');
-      expect(result.warnings?.[0].contexts).toContainEqual({ info: 'additional info' });
+      expect(result.isError).toBe(false);
+      const content = JSON.parse(result.content[0].text as string);
+      expect(content.success).toBe(true);
+      expect(content.warnings?.[0].code).toBe('TEST_WARNING');
+      expect(content.warnings?.[0].message).toBe('Test warning');
+      expect(content.warnings?.[0].contexts).toContainEqual({ info: 'additional info' });
     });
 
     it('should handle multiple errors and warnings', () => {
@@ -193,77 +222,102 @@ describe('McpSession', () => {
       session.logger.addWarning({ code: 'WARN1', message: 'First warning' });
       session.logger.addWarning({ code: 'WARN2', message: 'Second warning' });
 
-      const result = session.getResponse('test');
+      const result = session.getResult('test');
 
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.errors.length).toBe(2);
-        expect(result.warnings?.length).toBe(2);
-      }
+      expect(result.isError).toBe(true);
+      const content = JSON.parse(result.content[0].text as string);
+      expect(content.success).toBe(false);
+      expect(content.errors.length).toBe(2);
+      expect(content.warnings?.length).toBe(2);
+    });
+
+    it('should prioritize errors over warnings in result status', () => {
+      session.logger.addWarning({ code: 'WARN', message: 'Warning' });
+      session.logger.addError({ code: 'ERROR', message: 'Error' });
+      session.logger.addWarning({ code: 'WARN2', message: 'Another warning' });
+
+      const result = session.getResult('test');
+
+      expect(result.isError).toBe(true); // Should be error because errors exist
+      const content = JSON.parse(result.content[0].text as string);
+      expect(content.success).toBe(false);
+      expect(content.errors.length).toBe(1);
+      expect(content.warnings?.length).toBe(2);
+    });
+  });
+
+  describe('McpInterruptError class', () => {
+    it('should have correct name and properties', () => {
+      const mockResponse = { isError: true, content: [{ type: 'text', text: '{}' }] };
+      const error = new McpInterruptError(mockResponse);
+
+      expect(error.name).toBe('McpInterruptError');
+      expect(error.message).toBe('MCP request interrupted');
+      expect(error.isMcpInterrupt).toBe(true);
+      expect(error.response).toBe(mockResponse);
+    });
+
+    it('should be instance of Error', () => {
+      const mockResponse = { isError: true, content: [{ type: 'text', text: '{}' }] };
+      const error = new McpInterruptError(mockResponse);
+
+      expect(error).toBeInstanceOf(Error);
+      expect(error).toBeInstanceOf(McpInterruptError);
     });
   });
 
   describe('error context handling', () => {
+    it('should handle errors with various context types', () => {
+      const errorWithStringContext: McpSession.Error = {
+        code: 'STRING_CONTEXT',
+        message: 'Error with string context',
+        context: 'simple string'
+      };
+
+      const errorWithObjectContext: McpSession.Error = {
+        code: 'OBJECT_CONTEXT',
+        message: 'Error with object context',
+        context: { complex: { nested: 'value' }, array: [1, 2, 3] }
+      };
+
+      const errorWithNumberContext: McpSession.Error = {
+        code: 'NUMBER_CONTEXT',
+        message: 'Error with number context',
+        context: 42
+      };
+
+      session.logger.addError(errorWithStringContext);
+      session.logger.addError(errorWithObjectContext);
+      session.logger.addError(errorWithNumberContext);
+
+      const result = session.getResult('test');
+      
+      expect(result.isError).toBe(true);
+      const content = JSON.parse(result.content[0].text as string);
+      expect(content.errors).toHaveLength(3);
+      
+      // Check that all context types are preserved
+      const errorCodes = content.errors.map((e: any) => e.code);
+      expect(errorCodes).toContain('STRING_CONTEXT');
+      expect(errorCodes).toContain('OBJECT_CONTEXT');
+      expect(errorCodes).toContain('NUMBER_CONTEXT');
+    });
+
     it('should handle errors without context', () => {
-      const error: McpSession.Error = {
-        code: 'NO_CONTEXT_ERROR',
+      const errorWithoutContext: McpSession.Error = {
+        code: 'NO_CONTEXT',
         message: 'Error without context'
+        // no context field
       };
 
-      try {
-        session.throwError(error);
-      } catch (thrownError) {
-        const mcpError = thrownError as McpInterruptError;
-        expect(mcpError.response.data.criticalError.context).toBeUndefined();
-      }
-    });
+      session.logger.addError(errorWithoutContext);
+      const result = session.getResult('test');
 
-    it('should preserve error context', () => {
-      const error: McpSession.Error = {
-        code: 'CONTEXT_ERROR',
-        message: 'Error with context',
-        context: {
-          userId: '123',
-          operation: 'test',
-          timestamp: Date.now()
-        }
-      };
-
-      try {
-        session.throwError(error);
-      } catch (thrownError) {
-        const mcpError = thrownError as McpInterruptError;
-        expect(mcpError.response.data.criticalError.context).toEqual(error.context);
-      }
-    });
-  });
-
-  describe('response types', () => {
-    it('should have correct success response structure', () => {
-      const result = session.getResponse('test');
-      
-      expect(result).toHaveProperty('success');
-      expect(result).toHaveProperty('data');
-      expect(result.success).toBe(true);
-      
-      if (result.success) {
-        expect(result.data).toBe('test');
-      }
-    });
-
-    it('should have correct error response structure', () => {
-      session.logger.addError({ code: 'TEST', message: 'Test' });
-      const result = session.getResponse('test');
-      
-      expect(result).toHaveProperty('success');
-      expect(result).toHaveProperty('data');
-      expect(result).toHaveProperty('errors');
-      expect(result.success).toBe(false);
-      
-      if (!result.success) {
-        expect(result.data).toBe('test');
-        expect(Array.isArray(result.errors)).toBe(true);
-      }
+      expect(result.isError).toBe(true);
+      const content = JSON.parse(result.content[0].text as string);
+      expect(content.errors).toHaveLength(1);
+      expect(content.errors[0].code).toBe('NO_CONTEXT');
+      expect(content.errors[0].message).toBe('Error without context');
     });
   });
 }); 

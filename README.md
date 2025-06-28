@@ -22,6 +22,7 @@ npm install flowmcp
 
 ```typescript
 import { McpBuilder } from 'flowmcp';
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 
 const builder = new McpBuilder();
 
@@ -36,15 +37,27 @@ const result = builder.addTool({
     },
     required: ['filename']
   }
-}, async (request) => {
+}, async (session, request) => {
   const { project, filename } = request.params.arguments;
   // project is validated as absolute path
   
-  return {
-    content: [{ type: 'text', text: `Reading ${filename} from ${project}` }],
-    isError: false
-  };
+  try {
+    const content = await readFile(path.join(project, filename));
+    return session.getResult({ content, filename });
+  } catch (error) {
+    session.logger.addError({
+      code: 'FILE_READ_ERROR',
+      message: `Failed to read file: ${error.message}`,
+      context: { project, filename }
+    });
+    
+    return session.getResult({ error: 'File not found' });
+  }
 });
+
+// Apply tools to MCP server
+const server = new Server({ name: 'file-server', version: '1.0.0' });
+builder.applyToServer(server);
 ```
 
 ### Handle MCP Sessions
@@ -66,8 +79,8 @@ function handleRequest(requestData) {
     // This line never executes - throwError stops execution
   }
   
-  // Generate responses (logger included)
-  return session.getResponse({ success: true, data: 'result' });
+  // Generate responses
+  return session.getResult({ data: 'result' });
 }
 ```
 
@@ -89,14 +102,16 @@ const { errors, warnings } = logger.getResponse();
 
 ## Integration
 
-Complete MCP tool workflow:
+Complete MCP server integration:
 
 ```typescript
-import { McpBuilder, McpSession } from 'flowmcp';
+import { McpBuilder } from 'flowmcp';
+import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 
 const builder = new McpBuilder();
+const server = new Server({ name: 'my-mcp-server', version: '1.0.0' });
 
-// Build tool with per-request session handling
+// Register tools
 builder.addTool({
   name: 'process_data',
   description: 'Process project data',
@@ -106,27 +121,28 @@ builder.addTool({
       data: { type: 'string' }
     }
   }
-}, async (request) => {
-  // Create session for this request
-  const session = new McpSession();
+}, async (session, request) => {
   const { project, data } = request.params.arguments;
   
   try {
-    // Process with automatic project validation
     const result = await processData(project, data);
-    return session.getResponse({ success: true, result });
+    return session.getResult({ result });
   } catch (error) {
-    // Log error for analysis
     session.logger.addError({ 
       code: 'PROCESSING_ERROR', 
       message: error.message,
       context: { project, data }
     });
     
-    // Return error response with logged errors
-    return session.getResponse({ success: false, error: error.message });
+    return session.getResult({ error: error.message });
   }
 });
+
+// Apply all registered tools to the server
+builder.applyToServer(server);
+
+// Start the server
+server.connect(transport);
 ```
 
 ## Modules

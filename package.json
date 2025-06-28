@@ -1,10 +1,14 @@
 {
   "name": "flowmcp",
-  "version": "2.0.1",
+  "version": "2.1.0",
   "description": "Powerful toolkit for MCP (Model Context Protocol) tools and automated workflow processes",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/EgorKluch/flowmcp.git"
+  },
   "exports": {
     ".": {
       "import": "./dist/index.js",

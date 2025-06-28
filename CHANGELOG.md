@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0]
+
+### Added
+- **McpBuilder.applyToServer()** method for applying registered tools to MCP Server
+- Repository URL in package.json for better npm integration
+- Comprehensive test coverage for new API changes
+
+### Changed
+- **BREAKING**: McpSession API completely redesigned:
+  - Replaced `getResponse<TData>(): McpSession.Response<TData>` with `getResult<TData>(): CallToolResult`
+  - Removed custom response types (`SuccessResponse`, `ErrorResponse`, `Response`)
+  - Now returns native MCP SDK `CallToolResult` for better protocol compliance
+- **BREAKING**: McpBuilder ToolHandler signature changed:
+  - Old: `(request: CallToolRequest) => Promise<CallToolResult>`
+  - New: `(session: McpSession, request: CallToolRequest) => Promise<CallToolResult>`
+  - Session is now passed as first parameter to all tool handlers
+
+### Removed
+- **BREAKING**: `McpToolError` class completely removed
+  - No longer exported from public API
+  - Replaced with `session.throwError()` for consistent error handling
+  - All error throwing now goes through McpSession
+
+### Fixed
+- TypeScript compilation errors due to removed exports
+- Better error handling consistency across the API
+
+### Migration Guide
+- **Tool Handlers**: Update signature to accept `session` as first parameter: `async (session, request) => { ... }`
+- **Response Generation**: Replace `session.getResponse(data)` with `session.getResult(data)`
+- **Error Handling**: Replace `throw new McpToolError(...)` with `session.throwError({ code, message, context })`
+- **Server Integration**: Use `builder.applyToServer(server)` to register tools with MCP server
+
 ## [2.0.0]
 
 ### Added

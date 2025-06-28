@@ -1,9 +1,17 @@
 import { Logger } from "../Logger/index.js";
+import { McpSession, McpInterruptError } from "../McpSession/index.js";
 import type {
   Tool,
   CallToolRequest,
-  CallToolResult
+  CallToolResult,
+  ListToolsRequest,
+  ListToolsResult
 } from '@modelcontextprotocol/sdk/types.js';
+import { 
+  ListToolsRequestSchema, 
+  CallToolRequestSchema 
+} from '@modelcontextprotocol/sdk/types.js';
+import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 
 // Minimal JSON Schema types needed for our use case
 type JSONSchemaType = 'object' | 'string' | 'number' | 'boolean' | 'array' | 'null';
@@ -21,7 +29,7 @@ type JSONSchemaProperty = {
 
 type JSONSchema = JSONSchemaProperty;
 
-// MCP Tool related error types
+// MCP Tool related error codes
 export enum McpToolErrorCode {
   TOOL_NOT_FOUND = 'TOOL_NOT_FOUND',
   TOOL_ALREADY_EXISTS = 'TOOL_ALREADY_EXISTS',
@@ -29,17 +37,6 @@ export enum McpToolErrorCode {
   INVALID_TOOL_SCHEMA = 'INVALID_TOOL_SCHEMA',
   MISSING_PROJECT_PARAMETER = 'MISSING_PROJECT_PARAMETER',
   INVALID_PROJECT_PATH = 'INVALID_PROJECT_PATH',
-}
-
-export class McpToolError extends Error {
-  constructor(
-    public readonly code: McpToolErrorCode,
-    message: string,
-    public readonly context?: unknown
-  ) {
-    super(message);
-    this.name = 'McpToolError';
-  }
 }
 
 export declare namespace McpBuilder {
@@ -96,7 +93,7 @@ export declare namespace McpBuilder {
     additionalProperties?: boolean | JSONSchema;
   };
 
-  type ToolHandler = (request: CallToolRequest) => Promise<CallToolResult>;
+  type ToolHandler = (session: McpSession, request: CallToolRequest) => Promise<CallToolResult>;
 
   type ToolRegistration = {
     tool: Tool;
@@ -141,13 +138,7 @@ export class McpBuilder {
   addTool(tool: Tool, handler: McpBuilder.ToolHandler): McpBuilder.Response<void> {
     try {
       // Validate tool
-      const validation = this.validateTool(tool);
-      if (!validation.isValid) {
-        this.logger.addError({
-          code: McpToolErrorCode.INVALID_TOOL_SCHEMA,
-          message: `Invalid tool schema for '${tool.name}'`,
-          context: { errors: validation.errors }
-        });
+      if (!this.validateTool(tool)) {
         return this.getResponse(undefined);
       }
 
@@ -227,59 +218,121 @@ export class McpBuilder {
    * Create enhanced handler that validates project parameter
    */
   private createEnhancedHandler(originalHandler: McpBuilder.ToolHandler): McpBuilder.ToolHandler {
-    return async (request: CallToolRequest): Promise<CallToolResult> => {
+    return async (session: McpSession, request: CallToolRequest): Promise<CallToolResult> => {
       const args = request.params.arguments || {};
       
       // Validate project parameter
       if (!args.project || typeof args.project !== 'string') {
-        throw new McpToolError(
-          McpToolErrorCode.MISSING_PROJECT_PARAMETER,
-          'Project parameter is required and must be a non-empty string',
-          { providedArgs: args }
-        );
+        session.throwError({
+          code: McpToolErrorCode.MISSING_PROJECT_PARAMETER,
+          message: 'Project parameter is required and must be a non-empty string',
+          context: { providedArgs: args }
+        });
       }
 
       // Basic validation that project is an absolute path
       if (!args.project.startsWith('/') && !args.project.match(/^[A-Za-z]:[\\\/]/)) {
-        throw new McpToolError(
-          McpToolErrorCode.INVALID_PROJECT_PATH,
-          'Project parameter must be an absolute path',
-          { providedProject: args.project }
-        );
+        session.throwError({
+          code: McpToolErrorCode.INVALID_PROJECT_PATH,
+          message: 'Project parameter must be an absolute path',
+          context: { providedProject: args.project }
+        });
       }
 
       // Call original handler with validated arguments
-      return await originalHandler(request);
+      return await originalHandler(session, request);
     };
   }
 
   /**
    * Validate tool definition
    */
-  private validateTool(tool: Tool): McpBuilder.ToolValidationResult {
-    const errors: string[] = [];
-
+  private validateTool(tool: Tool): boolean {
     if (!tool.name || typeof tool.name !== 'string') {
-      errors.push('Tool name is required and must be a string');
+      this.logger.addError({
+        code: McpToolErrorCode.INVALID_TOOL_SCHEMA,
+        message: `Tool name is required and must be a string`,
+        context: { tool }
+      });
     }
 
     if (!tool.description || typeof tool.description !== 'string') {
-      errors.push('Tool description is required and must be a string');
+      this.logger.addError({
+        code: McpToolErrorCode.INVALID_TOOL_SCHEMA,
+        message: `Tool description is required and must be a string`,
+        context: { tool }
+      });
     }
 
     if (!tool.inputSchema || typeof tool.inputSchema !== 'object') {
-      errors.push('Tool inputSchema is required and must be an object');
+      this.logger.addError({
+        code: McpToolErrorCode.INVALID_TOOL_SCHEMA,
+        message: `Tool inputSchema is required and must be an object`,
+        context: { tool }
+      });
     }
 
     // Check if tool name contains only valid characters
     if (tool.name && !/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(tool.name)) {
-      errors.push('Tool name must start with a letter and contain only letters, numbers, underscores, and hyphens');
+      this.logger.addError({
+        code: McpToolErrorCode.INVALID_TOOL_SCHEMA,
+        message: `Tool name must start with a letter and contain only letters, numbers, underscores, and hyphens`,
+        context: { tool }
+      });
     }
 
-    return {
-      isValid: errors.length === 0,
-      errors
-    };
+    const { errors } = this.logger.getResponse();
+    return errors.length === 0;
+  }
+
+  /**
+   * Apply registered tools to MCP Server by setting up request handlers
+   * @param server - MCP Server instance
+   */
+  applyToServer(server: Server): void {
+    // Set up ListTools handler
+    server.setRequestHandler(ListToolsRequestSchema, async (_request: ListToolsRequest): Promise<ListToolsResult> => {
+      const tools: Tool[] = [];
+      
+      for (const registration of this.registeredTools.values()) {
+        tools.push(registration.tool);
+      }
+      
+      return { tools };
+    });
+
+    // Set up CallTool handler
+    server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest): Promise<CallToolResult> => {
+      const session = new McpSession();
+      const toolName = request.params.name;
+      
+      try {
+        const registration = this.registeredTools.get(toolName);
+        
+        if (!registration) {
+          return session.throwError({
+            code: McpToolErrorCode.TOOL_NOT_FOUND,
+            message: `Tool '${toolName}' not found`,
+            context: { availableTools: Array.from(this.registeredTools.keys()) }
+          });
+        }
+        
+        return await registration.handler(session, request);
+      } catch (error) {
+        // Handle McpInterruptError properly - the response is already a CallToolResult
+        if (error instanceof McpInterruptError) {
+          return error.response;
+        }
+        
+        // Handle other errors through session
+        session.logger.addError({
+          code: McpToolErrorCode.TOOL_EXECUTION_ERROR,
+          message: `Error executing tool '${toolName}': ${error instanceof Error ? error.message : String(error)}`,
+        });
+        
+        return session.getResult({});
+      }
+    });
   }
   
   getResponse<TData>(data: TData): McpBuilder.Response<TData> {
