@@ -1,0 +1,53 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Rule Index
+
+## Domain Hierarchy
+
+### development
+- **development.scope.compliance**
+  - g-scope.mdc: Strict scope compliance - prevent unauthorized feature addition
+  
+- **development.session.execution**
+  - g-session-tpl.laml.mdc: Session management and scope boundaries
+  
+- **development.mcp.server**
+  - g-mcp-creation.laml.mdc: MCP server creation and architecture
+  - g-mcp.laml.mdc: MCP stability and API management
+
+### codebase
+- **codebase.architecture.modular**
+  - g-lmodules.laml.mdc: Local modules and component organization
+  - g-common.laml.mdc: General naming conventions and code changes
+  
+- **codebase.modules.logger**
+  - src/Logger/.cursor/rules/Logger.mdc: Logger module scope and API
+
+### rules
+- **rules.management.system**
+  - g-rules.laml.mdc: Cursor rule generation and management
+  - g-laml.mdc: LAML specification and document management
+
+### workflow
+- **workflow.optimization.llm**
+  - g-rules.laml.mdc: LLM-optimized rule management workflows
+
+## Rule Registry
+
+### Critical Rules (Always Apply)
+- **g-scope.mdc**: Strict scope compliance - prevents unauthorized feature additions
+- **g-common.laml.mdc**: General naming conventions and code change prevention
+- **g-rules.laml.mdc**: Rule management system and LLM workflows
+
+### Domain-Specific Rules
+- **g-mcp.laml.mdc**: MCP API stability and server patterns
+- **g-lmodules.laml.mdc**: Local module organization and documentation
+- **g-session-tpl.laml.mdc**: Session template and scope boundary management
+- **Logger.mdc**: Logger module boundaries and operational behavior
+
+### Specialized Rules
+- **g-mcp-creation.laml.mdc**: MCP server creation foundation
+- **g-laml.mdc**: LAML specification and document structure

@@ -1,0 +1,105 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+$meta:
+  name: 'loggerModule'
+  goal: 'defineLoggerModuleScope'
+  domain: 'codebase.modules.logger'
+  apply: 'loggerModule'
+  version: 1.0
+  purpose: "Define Logger module responsibility, API, and operational behavior"
+  domains: ['codebase.modules.logger', 'architecture.component.logging', 'development.patterns.errorHandling']
+
+moduleScope:
+  purpose: "Centralized error and warning collection with intelligent frequency-based analysis"
+  
+  responsibility:
+    primary: "Collect, group, and analyze errors and warnings for priority identification"
+    boundaries:
+      include: ['Error/warning aggregation', 'Context tracking', 'Frequency analysis', 'Priority sorting']
+      exclude: ['Error generation', 'Logging output formatting', 'Log persistence', 'Alert systems']
+  
+  characteristics:
+    selfContained: "Complete functionality within module directory"
+    minimalDependencies: "Only depends on type definitions and McpManager reference"
+    singlePurpose: "Focus exclusively on error/warning collection and analysis"
+    testable: "Fully unit tested with 100% coverage"
+
+publicAPI:
+  purpose: "Well-defined interface for error and warning management"
+  
+  constructor:
+    signature: "Logger<TError, TWarning>(opts: Logger.Opts)"
+    requirements: ['McpManager instance reference']
+    
+  methods:
+    addError:
+      purpose: "Add error with automatic grouping and context tracking"
+      behavior: "Groups by code/message, tracks context frequency"
+      sideEffects: "Updates internal error storage"
+      
+    addWarning:
+      purpose: "Add warning with automatic grouping and context tracking"
+      behavior: "Groups by code/message, tracks context frequency"
+      sideEffects: "Updates internal warning storage"
+      
+    throwError:
+      purpose: "Add error and throw exception for critical failures"
+      behavior: "Logs error then throws exception with message or code"
+      sideEffects: "Updates storage and throws exception"
+      
+    getResponse:
+      purpose: "Retrieve prioritized summary of errors and warnings"
+      behavior: "Returns top 10 most frequent errors/warnings with contexts"
+      guarantees: ['Frequency-sorted results', 'Limited to 10 items', 'Clean data without internal counters']
+
+behaviorPatterns:
+  purpose: "Define operational workflows and expected behaviors"
+  
+  errorProcessing:
+    workflow: "Receive → Group by code → Deduplicate by message → Track context frequency → Store"
+    grouping: "Errors with same code and message are grouped together"
+    contextHandling: "Track frequency of unique contexts within each error group"
+    
+  warningProcessing:
+    workflow: "Receive → Group by code → Deduplicate by message → Track context frequency → Store"
+    consistency: "Same logic as errors but separate storage"
+    
+  responseGeneration:
+    workflow: "Aggregate → Sort by frequency → Limit to top 10 → Clean data → Return"
+    sorting: "Most frequent errors and warnings appear first"
+    contextLimiting: "Maximum 10 contexts per error/warning, sorted by frequency"
+    dataCleanup: "Remove internal counters from public response"
+
+dependencies:
+  purpose: "Define module relationships and external requirements"
+  
+  required:
+    McpManager: "Parent manager instance (circular reference for module integration)"
+    McpError: "Type definition for error structure (code, message, context)"
+    McpWarning: "Type definition for warning structure (code, message, context)"
+    
+  relationships:
+    parent: "McpManager creates and owns Logger instance"
+    siblings: "Independent of other modules, communicates only through McpManager"
+    children: "No child modules"
+
+constraints:
+  purpose: "Define operational limits and guarantees"
+  
+  performance:
+    efficiency: "Optimized for frequent additions with minimal memory overhead"
+    deduplication: "Efficient grouping prevents duplicate storage"
+    scaling: "Handles large numbers of similar errors/warnings efficiently"
+    
+  dataIntegrity:
+    grouping: "Consistent grouping logic across errors and warnings"
+    frequency: "Accurate frequency counting for priority determination"
+    immutability: "Readonly access to internal storage from external code"
+    
+  typeConstraints:
+    generics: "TError extends McpError, TWarning extends McpWarning"
+    safety: "Full TypeScript type safety with no non-null assertions"
+    consistency: "Consistent typing across all public methods"
