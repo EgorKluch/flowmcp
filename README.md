@@ -47,8 +47,7 @@ const result = builder.addTool({
   } catch (error) {
     session.logger.addError({
       code: 'FILE_READ_ERROR',
-      message: `Failed to read file: ${error.message}`,
-      context: { project, filename }
+      context: { project, filename, error: error.message }
     });
     
     return session.getResult({ error: 'File not found' });
@@ -72,9 +71,8 @@ function handleRequest(requestData) {
   // Use throwError for critical failures that should stop execution
   if (requestData.invalid) {
     session.throwError({
-      code: 'CRITICAL_ERROR', 
-      message: 'Operation failed',
-      context: { reason: 'invalid input' }
+      code: 'INVALID_REQUEST_DATA',
+      context: { invalidFields: requestData.getInvalidFields() }
     });
     // This line never executes - throwError stops execution
   }
@@ -92,9 +90,9 @@ import { Logger } from 'flowmcp';
 // Logger can be used independently of sessions
 const logger = new Logger();
 
-// Collect and group errors
-logger.addError({ code: 'VALIDATION', message: 'Invalid format' });
-logger.addWarning({ code: 'DEPRECATED', message: 'Old API usage' });
+// Collect and group errors (by code)
+logger.addError({ code: 'VALIDATION_ERROR', context: { field: 'email', format: 'invalid' } });
+logger.addWarning({ code: 'DEPRECATED_API', context: { endpoint: '/old-api', replacement: '/v2/api' } });
 
 // Get prioritized summary
 const { errors, warnings } = logger.getResponse();
@@ -129,9 +127,8 @@ builder.addTool({
     return session.getResult({ result });
   } catch (error) {
     session.logger.addError({ 
-      code: 'PROCESSING_ERROR', 
-      message: error.message,
-      context: { project, data }
+      code: 'PROCESSING_ERROR',
+      context: { project, data, error: error.message }
     });
     
     return session.getResult({ error: error.message });
@@ -143,6 +140,80 @@ builder.applyToServer(server);
 
 // Start the server
 server.connect(transport);
+```
+
+## Good Practices
+
+### Error Handling
+
+- **Use message only when necessary**: Add `message` only when the error `code` is insufficient for understanding the error
+- **Context for LLM guidance**: Use `context` to provide meaningful information for LLM error handling, not duplicate data
+- **Avoid duplication**: Context should not duplicate information from `message` or `code`
+- **Grouping by code**: All errors/warnings with the same `code` are grouped together regardless of message
+- **Descriptive error codes**: Use specific, descriptive error codes that clearly indicate the problem
+- **Create error utilities**: Build helper functions for common error patterns to ensure consistency
+
+#### Good Examples
+
+```typescript
+// Good: Code is self-explanatory, context provides actionable info
+session.logger.addError({
+  code: 'FILE_NOT_FOUND',
+  context: { path: '/missing/file.txt', suggestion: 'check file permissions' }
+});
+
+// Good: Message adds clarity when code isn't enough
+session.logger.addError({
+  code: 'VALIDATION_ERROR',
+  message: 'Email format is invalid',
+  context: { field: 'email', value: 'invalid-email' }
+});
+
+// Good: Specific, descriptive error codes
+session.logger.addError({
+  code: 'FILE_NOT_FOUND',  // clearly indicates what's missing
+  context: { path: '/config.json' }
+});
+
+// Good: Error utility functions for consistency
+function fileNotFoundError(path: string) {
+  return {
+    code: 'FILE_NOT_FOUND' as const,
+    context: { path }
+  };
+}
+
+session.logger.addError(fileNotFoundError('/missing/file.txt'));
+```
+
+#### Avoid
+
+```typescript
+// Bad: Message duplicates what code already says
+session.logger.addError({
+  code: 'FILE_NOT_FOUND',
+  message: 'File not found',  // redundant
+  context: { path: '/missing/file.txt' }
+});
+
+// Bad: Context duplicates message information
+session.logger.addError({
+  code: 'VALIDATION_ERROR',
+  message: 'Invalid email format',
+  context: { error: 'Invalid email format' }  // duplicates message
+});
+
+// Bad: Vague, non-descriptive error codes
+session.logger.addError({
+  code: 'NOT_FOUND',  // what wasn't found?
+  context: { path: '/config.json' }
+});
+
+// Bad: Generic error codes
+session.logger.addError({
+  code: 'ERROR',  // too generic, provides no useful information
+  context: { operation: 'file-read' }
+});
 ```
 
 ## Modules

@@ -292,16 +292,16 @@ types:
   McpBuilder:
     ToolHandler: "(session: McpSession, request: CallToolRequest) => Promise<CallToolResult>"
     Response: "SuccessResponse<TData> | ErrorResponse<TData>"
-    Error: "{ message: string, code: string, context?: unknown }"
-    Warning: "{ message: string, code: string, context?: unknown }"
+    Error: "{ message?: string, code: string, context?: unknown }"
+    Warning: "{ message?: string, code: string, context?: unknown }"
     
   McpSession:
-    Error: "{ message: string, code: string, context?: unknown }"
-    Warning: "{ message: string, code: string, context?: unknown }"
+    Error: "{ message?: string, code: string, context?: unknown }"
+    Warning: "{ message?: string, code: string, context?: unknown }"
     
   Logger:
-    Error: "{ message: string, code: string, context?: unknown }"
-    Warning: "{ message: string, code: string, context?: unknown }"
+    Error: "{ message?: string, code: string, context?: unknown }"
+    Warning: "{ message?: string, code: string, context?: unknown }"
     Response: "{ errors: ResponseError[], warnings: ResponseWarning[] }"
     
   McpInterruptError:
@@ -319,7 +319,12 @@ bestPractices:
     
   errorHandling:
     granularity: "Use specific error codes for different failure types"
-    context: "Include relevant context information for debugging"
+    descriptiveCodes: "Use descriptive error codes (FILE_NOT_FOUND vs NOT_FOUND)"
+    messageUsage: "Add message only when code is insufficient for understanding the error"
+    contextPurpose: "Use context to provide meaningful information for LLM error handling"
+    contextUniqueness: "Context should not duplicate information from message or code"
+    groupingByCode: "Errors and warnings are grouped by code, not by message"
+    errorUtilities: "Create utility functions for common error patterns to ensure consistency"
     criticality: "Reserve session.throwError() for truly critical failures"
     recovery: "Use session.logger.addError() for recoverable issues"
     
@@ -331,7 +336,9 @@ bestPractices:
   logging:
     frequency: "Logger automatically handles frequency analysis"
     codes: "Use consistent error/warning codes across your application"
-    context: "Include relevant debugging context in error objects"
+    context: "Use context to pass meaningful debugging information, not duplicate data"
+    grouping: "All errors/warnings with same code are grouped together regardless of message"
+    utilities: "Use helper functions for consistent error creation across application"
     
   performance:
     sessionReuse: "Don't create new sessions unnecessarily - use provided session"

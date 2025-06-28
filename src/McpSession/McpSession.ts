@@ -14,13 +14,13 @@ export declare namespace McpSession {
   type Opts = {};
   
   type Error = {
-    message: string;
+    message?: string;
     code: string;
     context?: unknown;
   };
   
   type Warning = {
-    message: string;
+    message?: string;
     code: string;
     context?: unknown;
   };
