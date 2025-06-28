@@ -1,6 +1,6 @@
 {
   "name": "flowmcp",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "Powerful toolkit for MCP (Model Context Protocol) tools and automated workflow processes",
   "type": "module",
   "main": "dist/index.js",
