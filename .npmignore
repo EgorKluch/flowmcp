@@ -3,11 +3,15 @@ src/
 *.ts
 !*.d.ts
 
+# Include dist folder in npm package (even though it's gitignored)
+!dist/
+
 # Development files
 tsconfig.json
 jest.config.js
 **/.cursor/
 *.tsbuildinfo
+docs-flowmcp.laml.mdc
 
 # Testing
 coverage/

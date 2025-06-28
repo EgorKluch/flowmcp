@@ -9,6 +9,11 @@
     "type": "git",
     "url": "https://github.com/EgorKluch/flowmcp.git"
   },
+  "files": [
+    "dist/",
+    "README.md",
+    "CHANGELOG.md"
+  ],
   "exports": {
     ".": {
       "import": "./dist/index.js",
