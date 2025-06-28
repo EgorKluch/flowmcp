@@ -1,28 +1,8 @@
-// Main exports
-export { McpManager } from './McpManager/index.js';
+// Independent logger utility
 export { Logger } from './Logger/index.js';
 
-// Type exports
-export type { McpError, McpWarning } from './types/index.js';
+// MCP building functionality
+export { McpBuilder, McpToolError, McpToolErrorCode } from './McpBuilder/index.js';
 
-// MCP Tool exports
-export { 
-  McpInterruptError, 
-  McpToolError, 
-  McpToolErrorCode 
-} from './McpManager/index.js';
-
-export type {
-  Tool,
-  CallToolRequest,
-  CallToolResult,
-  ListToolsRequest,
-  ListToolsResult,
-  ToolRegistration,
-  ToolHandler,
-  ExtendedTool,
-  ExtendedToolInputSchema,
-  SchemaWithProject,
-  ToolValidationResult,
-  ProjectSchema
-} from './McpManager/index.js'; 
+// MCP session functionality
+export { McpSession, McpInterruptError } from './McpSession/index.js'; 

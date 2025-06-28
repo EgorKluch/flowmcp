@@ -1,0 +1,43 @@
+# Source files (not needed in npm package)
+src/
+*.ts
+!*.d.ts
+
+# Development files
+tsconfig.json
+jest.config.js
+**/.cursor/
+*.tsbuildinfo
+
+# Testing
+coverage/
+**/*.test.ts
+**/*.test.js
+**/__tests__/
+
+# Development dependencies
+.vscode/
+.idea/
+
+# Git
+.git/
+.gitignore
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env*
+
+# Temporary files
+*.tmp
+*.swp
+*~
+
+# Lock files (optional - some prefer to include package-lock.json)
+# package-lock.json 

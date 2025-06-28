@@ -1,28 +1,22 @@
 import { Logger } from './Logger';
-import { McpManager } from '../McpManager/index.js';
-import { McpError } from '../types/errors.js';
-import { McpWarning } from '../types/McpWarning.js';
 
 describe('Logger', () => {
-  let logger: Logger<McpError, McpWarning>;
-  let mockManager: McpManager<McpError, McpWarning>;
+  let logger: Logger;
 
   beforeEach(() => {
-    mockManager = {} as McpManager<McpError, McpWarning>;
-    logger = new Logger({ manager: mockManager });
+    logger = new Logger();
   });
 
   describe('constructor', () => {
     it('should initialize with empty errors and warnings', () => {
       expect(Object.keys(logger.errors)).toHaveLength(0);
       expect(Object.keys(logger.warnings)).toHaveLength(0);
-      expect(logger.manager).toBe(mockManager);
     });
   });
 
   describe('addError', () => {
     it('should add error without context', () => {
-      const error: McpError = { code: 'E001', message: 'Test error' };
+      const error: Logger.Error = { code: 'E001', message: 'Test error' };
       
       logger.addError(error);
       
@@ -34,7 +28,7 @@ describe('Logger', () => {
     });
 
     it('should add error with context', () => {
-      const error: McpError = { code: 'E001', message: 'Test error', context: 'test-context' };
+      const error: Logger.Error = { code: 'E001', message: 'Test error', context: 'test-context' };
       
       logger.addError(error);
       
@@ -80,7 +74,7 @@ describe('Logger', () => {
 
   describe('addWarning', () => {
     it('should add warning without context', () => {
-      const warning: McpWarning = { code: 'W001', message: 'Test warning' };
+      const warning: Logger.Warning = { code: 'W001', message: 'Test warning' };
       
       logger.addWarning(warning);
       
@@ -92,7 +86,7 @@ describe('Logger', () => {
     });
 
     it('should add warning with context', () => {
-      const warning: McpWarning = { code: 'W001', message: 'Test warning', context: 'test-context' };
+      const warning: Logger.Warning = { code: 'W001', message: 'Test warning', context: 'test-context' };
       
       logger.addWarning(warning);
       
@@ -115,31 +109,6 @@ describe('Logger', () => {
       logger.addWarning({ code: 'W001', message: 'Test' });
       
       expect(logger.warnings['W001'].warnings[0].contexts).toHaveLength(0);
-    });
-  });
-
-  describe('throwError', () => {
-    beforeEach(() => {
-      // Create proper mock with getResponse method
-      mockManager.getResponse = (data: any) => ({
-        success: false,
-        data,
-        errors: [{ code: 'E001', message: 'Fatal error', contexts: [] }]
-      });
-    });
-
-    it('should add error and throw exception', () => {
-      const error: McpError = { code: 'E001', message: 'Fatal error' };
-      
-      expect(() => logger.throwError(error)).toThrow('MCP request interrupted');
-      
-      // throwError doesn't add to logger.errors, it just throws
-    });
-
-    it('should throw with code if no message', () => {
-      const error: McpError = { code: 'E001', message: '' };
-      
-      expect(() => logger.throwError(error)).toThrow('MCP request interrupted');
     });
   });
 
@@ -201,41 +170,51 @@ describe('Logger', () => {
     });
 
     it('should limit contexts to 10 per error/warning', () => {
-      // Add error with many contexts
-      for (let i = 1; i <= 15; i++) {
-        logger.addError({ code: 'EMANY', message: 'Many contexts', context: `ctx-${i}` });
+      // Add an error with many contexts
+      for (let i = 0; i < 20; i++) {
+        logger.addError({ 
+          code: 'E999', 
+          message: 'Many contexts', 
+          context: `context-${i}` 
+        });
       }
-      
+
       const response = logger.getResponse();
-      const errorWithManyContexts = response.errors.find(e => e.code === 'EMANY');
+      const errorWithManyContexts = response.errors.find(e => e.code === 'E999');
       
       expect(errorWithManyContexts?.contexts).toHaveLength(10);
     });
 
     it('should return contexts sorted by frequency', () => {
       // Add contexts with different frequencies
-      logger.addError({ code: 'EFREQ', message: 'Freq test', context: 'rare' });
-      
-      for (let i = 0; i < 5; i++) {
-        logger.addError({ code: 'EFREQ', message: 'Freq test', context: 'common' });
-      }
-      
+      logger.addError({ code: 'E888', message: 'Test', context: 'freq1' });
+      logger.addError({ code: 'E888', message: 'Test', context: 'freq3' });
+      logger.addError({ code: 'E888', message: 'Test', context: 'freq3' });
+      logger.addError({ code: 'E888', message: 'Test', context: 'freq3' });
+      logger.addError({ code: 'E888', message: 'Test', context: 'freq2' });
+      logger.addError({ code: 'E888', message: 'Test', context: 'freq2' });
+
       const response = logger.getResponse();
-      const freqError = response.errors.find(e => e.code === 'EFREQ');
+      const testError = response.errors.find(e => e.code === 'E888');
       
-      expect(freqError?.contexts[0]).toBe('common'); // Most frequent first
-      expect(freqError?.contexts[1]).toBe('rare');
+      expect(testError?.contexts[0]).toBe('freq3'); // Most frequent first
+      expect(testError?.contexts[1]).toBe('freq2');
+      expect(testError?.contexts[2]).toBe('freq1');
     });
 
     it('should not include amount in response', () => {
+      logger.addError({ code: 'E001', message: 'Test error' });
+      
       const response = logger.getResponse();
       
       expect(response.errors[0]).not.toHaveProperty('amount');
-      expect(response.warnings[0]).not.toHaveProperty('amount');
+      expect(response.errors[0]).toHaveProperty('code');
+      expect(response.errors[0]).toHaveProperty('message');
+      expect(response.errors[0]).toHaveProperty('contexts');
     });
 
     it('should handle empty logger', () => {
-      const emptyLogger = new Logger({ manager: mockManager });
+      const emptyLogger = new Logger();
       const response = emptyLogger.getResponse();
       
       expect(response.errors).toHaveLength(0);
@@ -245,26 +224,40 @@ describe('Logger', () => {
 
   describe('edge cases', () => {
     it('should handle complex object contexts for errors', () => {
-      const complexContext = { nested: { value: 42 }, array: [1, 2, 3] };
-      logger.addError({ code: 'E001', message: 'Complex', context: complexContext });
+      const complexContext = { 
+        nested: { value: 123 }, 
+        array: [1, 2, 3], 
+        func: () => 'test' 
+      };
       
-      expect(logger.errors['E001'].errors[0].contexts[0].context).toEqual(complexContext);
+      logger.addError({ 
+        code: 'E001', 
+        message: 'Complex context', 
+        context: complexContext 
+      });
+      
+      expect(logger.errors['E001'].errors[0].contexts[0].context).toBe(complexContext);
     });
 
     it('should handle many duplicate errors efficiently', () => {
-      const start = Date.now();
+      const startTime = performance.now();
       
+      // Add 1000 duplicate errors
       for (let i = 0; i < 1000; i++) {
-        logger.addError({ code: 'PERF', message: 'Performance test', context: 'same' });
+        logger.addError({ 
+          code: 'E001', 
+          message: 'Duplicate error', 
+          context: 'same-context' 
+        });
       }
       
-      const end = Date.now();
+      const endTime = performance.now();
       
-      expect(logger.errors['PERF'].amount).toBe(1000);
-      expect(logger.errors['PERF'].errors).toHaveLength(1);
-      expect(logger.errors['PERF'].errors[0].contexts).toHaveLength(1);
-      expect(logger.errors['PERF'].errors[0].contexts[0].amount).toBe(1000);
-      expect(end - start).toBeLessThan(100); // Should be fast
+      expect(endTime - startTime).toBeLessThan(100); // Should be fast
+      expect(logger.errors['E001'].amount).toBe(1000);
+      expect(logger.errors['E001'].errors).toHaveLength(1);
+      expect(logger.errors['E001'].errors[0].contexts).toHaveLength(1);
+      expect(logger.errors['E001'].errors[0].contexts[0].amount).toBe(1000);
     });
   });
 }); 

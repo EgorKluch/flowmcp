@@ -1,6 +1,4 @@
-import { McpManager } from '../McpManager/index.js';
-import {McpError, McpInterruptError} from "../types/errors.js";
-import {McpWarning} from "../types/McpWarning.js";
+// Logger is now independent - no external dependencies
 
 type GroupedError = {
   message: string;
@@ -23,38 +21,37 @@ type WarningGroup = {
 };
 
 export declare namespace Logger {
-  type Opts<TErrorType extends McpError, TWarningType extends McpWarning> = {
-    manager: McpManager<TErrorType, TWarningType>;
-  }
-  
   type Error = {
     message: string;
     code: string;
-    contexts: unknown[];
+    context?: unknown;
   };
   
   type Warning = {
     message: string;
     code: string;
-    contexts: unknown[];
+    context?: unknown;
   };
   
   type Response = {
-    errors: Error[];
-    warnings: Warning[];
+    errors: Array<{
+      message: string;
+      code: string;
+      contexts: unknown[];
+    }>;
+    warnings: Array<{
+      message: string;
+      code: string;
+      contexts: unknown[];
+    }>;
   };
 }
 
-export class Logger<TError extends McpError, TWarning extends McpWarning> {
+export class Logger {
   readonly errors: Record<string, ErrorGroup> = {};
   readonly warnings: Record<string, WarningGroup> = {};
-  manager: McpManager<TError, TWarning>;
 
-  constructor(opts: Logger.Opts<TError, TWarning>) {
-    this.manager = opts.manager;
-  }
-
-  addError(error: TError): void {
+  addError(error: Logger.Error): void {
     const { code, message, context } = error;
     
     if (!this.errors[code]) {
@@ -87,7 +84,7 @@ export class Logger<TError extends McpError, TWarning extends McpWarning> {
     errorGroup.amount++;
   }
 
-  addWarning(warning: TWarning): void {
+  addWarning(warning: Logger.Warning): void {
     const { code, message, context } = warning;
     
     if (!this.warnings[code]) {
@@ -118,11 +115,6 @@ export class Logger<TError extends McpError, TWarning extends McpWarning> {
       contexts: context != null ? [{ context, amount: 1 }] : []
     });
     warningGroup.amount++;
-  }
-
-  throwError(criticalError: TError): never {
-    const response = this.manager.getResponse({criticalError});
-    throw new McpInterruptError(response);
   }
 
   getResponse(): Logger.Response {

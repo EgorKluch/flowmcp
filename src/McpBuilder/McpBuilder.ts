@@ -1,20 +1,48 @@
-import {Logger} from "../Logger/index.js";
-import {McpError, McpToolError, McpToolErrorCode} from "../types/errors.js";
-import {McpWarning} from "../types/McpWarning.js";
+import { Logger } from "../Logger/index.js";
 import type {
   Tool,
   CallToolRequest,
-  CallToolResult,
-  ToolRegistration,
-  ToolHandler,
-  ExtendedTool,
-  ExtendedToolInputSchema,
-  ToolValidationResult,
-  ProjectSchema,
-  JSONSchema7
-} from "./types/tools.js";
+  CallToolResult
+} from '@modelcontextprotocol/sdk/types.js';
 
-export declare namespace McpManager {
+// Minimal JSON Schema types needed for our use case
+type JSONSchemaType = 'object' | 'string' | 'number' | 'boolean' | 'array' | 'null';
+
+type JSONSchemaProperty = {
+  type?: JSONSchemaType | JSONSchemaType[];
+  description?: string;
+  enum?: any[];
+  properties?: Record<string, JSONSchemaProperty>;
+  items?: JSONSchemaProperty;
+  required?: string[];
+  additionalProperties?: boolean | JSONSchemaProperty;
+  [key: string]: any;
+};
+
+type JSONSchema = JSONSchemaProperty;
+
+// MCP Tool related error types
+export enum McpToolErrorCode {
+  TOOL_NOT_FOUND = 'TOOL_NOT_FOUND',
+  TOOL_ALREADY_EXISTS = 'TOOL_ALREADY_EXISTS',
+  TOOL_EXECUTION_ERROR = 'TOOL_EXECUTION_ERROR',
+  INVALID_TOOL_SCHEMA = 'INVALID_TOOL_SCHEMA',
+  MISSING_PROJECT_PARAMETER = 'MISSING_PROJECT_PARAMETER',
+  INVALID_PROJECT_PATH = 'INVALID_PROJECT_PATH',
+}
+
+export class McpToolError extends Error {
+  constructor(
+    public readonly code: McpToolErrorCode,
+    message: string,
+    public readonly context?: unknown
+  ) {
+    super(message);
+    this.name = 'McpToolError';
+  }
+}
+
+export declare namespace McpBuilder {
   type Opts = {};
   
   type Error = {
@@ -32,25 +60,77 @@ export declare namespace McpManager {
   type SuccessResponse<TData> = {
     success: true;
     data: TData;
-    warnings?: McpManager.Warning[];
+    warnings?: McpBuilder.Warning[];
   };
   
   type ErrorResponse<TData> = {
     success: false;
     data: TData;
-    errors: McpManager.Error[];
-    warnings?: McpManager.Warning[];
+    errors: McpBuilder.Error[];
+    warnings?: McpBuilder.Warning[];
   };
   
   type Response<TData> = SuccessResponse<TData> | ErrorResponse<TData>;
+
+  // Tool-related types moved from tools.ts
+  type ProjectSchema = {
+    type: 'object';
+    properties: {
+      project: {
+        type: 'string';
+        description: 'Absolute path to the project directory';
+      };
+    };
+    required: ['project'];
+  };
+
+  type ExtendedToolInputSchema = {
+    type: 'object';
+    properties: {
+      project: {
+        type: 'string';
+        description: 'Absolute path to the project directory';
+      };
+    } & Record<string, JSONSchema>;
+    required: string[];
+    additionalProperties?: boolean | JSONSchema;
+  };
+
+  type ToolHandler = (request: CallToolRequest) => Promise<CallToolResult>;
+
+  type ToolRegistration = {
+    tool: Tool;
+    handler: ToolHandler;
+    originalSchema?: JSONSchema;
+  };
+
+  type ExtendedTool = Omit<Tool, 'inputSchema'> & {
+    inputSchema: ExtendedToolInputSchema;
+  };
+
+  type SchemaWithProject<T extends JSONSchema = JSONSchema> = T & {
+    properties: T extends { properties: infer P } 
+      ? P & ProjectSchema['properties']
+      : ProjectSchema['properties'];
+    required: T extends { required: infer R }
+      ? R extends readonly string[]
+        ? readonly [...R, 'project']
+        : ['project']
+      : ['project'];
+  };
+
+  type ToolValidationResult = {
+    isValid: boolean;
+    errors: string[];
+  };
 }
 
-export class McpManager<TError extends McpError, TWarning extends McpWarning> {
-  logger: Logger<TError, TWarning>;
-  private registeredTools: Map<string, ToolRegistration> = new Map();
+export class McpBuilder {
+  logger: Logger;
+  private registeredTools: Map<string, McpBuilder.ToolRegistration> = new Map();
 
-  constructor(_opts: McpManager.Opts = {}) {
-    this.logger = new Logger({ manager: this });
+  constructor(_opts: McpBuilder.Opts = {}) {
+    this.logger = new Logger();
   }
   
   /**
@@ -58,7 +138,7 @@ export class McpManager<TError extends McpError, TWarning extends McpWarning> {
    * @param tool - The tool definition with user's input schema
    * @param handler - Function to handle tool execution
    */
-  addTool(tool: Tool, handler: ToolHandler): McpManager.Response<void> {
+  addTool(tool: Tool, handler: McpBuilder.ToolHandler): McpBuilder.Response<void> {
     try {
       // Validate tool
       const validation = this.validateTool(tool);
@@ -67,7 +147,7 @@ export class McpManager<TError extends McpError, TWarning extends McpWarning> {
           code: McpToolErrorCode.INVALID_TOOL_SCHEMA,
           message: `Invalid tool schema for '${tool.name}'`,
           context: { errors: validation.errors }
-        } as TError);
+        });
         return this.getResponse(undefined);
       }
 
@@ -77,7 +157,7 @@ export class McpManager<TError extends McpError, TWarning extends McpWarning> {
           code: McpToolErrorCode.TOOL_ALREADY_EXISTS,
           message: `Tool '${tool.name}' already exists`,
           context: {}
-        } as TError);
+        });
         return this.getResponse(undefined);
       }
 
@@ -91,7 +171,7 @@ export class McpManager<TError extends McpError, TWarning extends McpWarning> {
       this.registeredTools.set(tool.name, {
         tool: extendedTool as unknown as Tool,
         handler: enhancedHandler,
-        originalSchema: tool.inputSchema as JSONSchema7
+        originalSchema: tool.inputSchema as JSONSchema
       });
 
       return this.getResponse(undefined);
@@ -100,7 +180,7 @@ export class McpManager<TError extends McpError, TWarning extends McpWarning> {
         code: McpToolErrorCode.TOOL_EXECUTION_ERROR,
         message: `Failed to add tool '${tool.name}': ${error instanceof Error ? error.message : String(error)}`,
         context: { error }
-      } as TError);
+      });
       return this.getResponse(undefined);
     }
   }
@@ -108,11 +188,11 @@ export class McpManager<TError extends McpError, TWarning extends McpWarning> {
   /**
    * Extend user's tool schema with required project parameter
    */
-  private extendToolWithProject(tool: Tool): ExtendedTool {
-    const inputSchema = tool.inputSchema as JSONSchema7;
+  private extendToolWithProject(tool: Tool): McpBuilder.ExtendedTool {
+    const inputSchema = tool.inputSchema as JSONSchema;
     
     // Create base project schema
-    const projectSchema: ProjectSchema = {
+    const projectSchema: McpBuilder.ProjectSchema = {
       type: 'object',
       properties: {
         project: {
@@ -124,7 +204,7 @@ export class McpManager<TError extends McpError, TWarning extends McpWarning> {
     };
 
     // Merge schemas
-    const extendedSchema: ExtendedToolInputSchema = {
+    const extendedSchema: McpBuilder.ExtendedToolInputSchema = {
       type: 'object',
       properties: {
         ...projectSchema.properties,
@@ -146,7 +226,7 @@ export class McpManager<TError extends McpError, TWarning extends McpWarning> {
   /**
    * Create enhanced handler that validates project parameter
    */
-  private createEnhancedHandler(originalHandler: ToolHandler): ToolHandler {
+  private createEnhancedHandler(originalHandler: McpBuilder.ToolHandler): McpBuilder.ToolHandler {
     return async (request: CallToolRequest): Promise<CallToolResult> => {
       const args = request.params.arguments || {};
       
@@ -176,7 +256,7 @@ export class McpManager<TError extends McpError, TWarning extends McpWarning> {
   /**
    * Validate tool definition
    */
-  private validateTool(tool: Tool): ToolValidationResult {
+  private validateTool(tool: Tool): McpBuilder.ToolValidationResult {
     const errors: string[] = [];
 
     if (!tool.name || typeof tool.name !== 'string') {
@@ -202,7 +282,7 @@ export class McpManager<TError extends McpError, TWarning extends McpWarning> {
     };
   }
   
-  getResponse<TData>(data: TData): McpManager.Response<TData> {
+  getResponse<TData>(data: TData): McpBuilder.Response<TData> {
     const { errors, warnings } = this.logger.getResponse();
     
     if (errors.length > 0) {
@@ -220,4 +300,4 @@ export class McpManager<TError extends McpError, TWarning extends McpWarning> {
       ...(warnings.length > 0 && { warnings })
     };
   }
-}
+} 

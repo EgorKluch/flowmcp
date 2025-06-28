@@ -1,6 +1,6 @@
 # FlowMCP
 
-A powerful toolkit for MCP (Model Context Protocol) tools and automated workflow processes. Streamline your development with intelligent tool management and process automation.
+Powerful toolkit for building MCP (Model Context Protocol) tools with automatic validation, error handling, and project path management.
 
 ## Installation
 
@@ -10,79 +10,136 @@ npm install flowmcp
 
 ## Key Features
 
-- **Tool Management** - Register and manage MCP tools with automatic schema validation
-- **Project Path Validation** - Automatic project parameter injection and validation for all tools  
-- **Error Handling** - Built-in error and warning management with automatic grouping
-- **Process Ready** - Built with future workflow and scenario automation in mind
-- **TypeScript Support** - Full TypeScript definitions included
+- **Tool Building** - Create MCP tools with automatic schema validation  
+- **Project Path Management** - Automatic project parameter injection and validation
+- **Session Handling** - Manage MCP request sessions with error handling
+- **Independent Logger** - Standalone error/warning collection with frequency analysis
+- **TypeScript Support** - Full type safety and IntelliSense support
 
 ## Basic Usage
 
-### Register MCP Tools
+### Build MCP Tools
 
 ```typescript
-import { McpManager } from 'flowmcp';
+import { McpBuilder } from 'flowmcp';
 
-const manager = new McpManager();
+const builder = new McpBuilder();
 
-// Define your tool
-const myTool = {
-  name: 'process_file',
-  description: 'Process a file in the project',
+// Register a tool - project parameter added automatically
+const result = builder.addTool({
+  name: 'read_file',
+  description: 'Read a file from the project',
   inputSchema: {
     type: 'object',
     properties: {
-      filename: { type: 'string', description: 'File to process' },
-      action: { type: 'string', enum: ['read', 'write', 'delete'] }
+      filename: { type: 'string' }
     },
-    required: ['filename', 'action'],
-    additionalProperties: false
+    required: ['filename']
   }
-};
-
-// Register tool with handler
-const result = manager.addTool(myTool, async (request) => {
-  const { project, filename, action } = request.params.arguments;
-  // Tool logic here - project parameter is automatically validated
-  return { content: [{ type: 'text', text: `Processed ${filename}` }] };
+}, async (request) => {
+  const { project, filename } = request.params.arguments;
+  // project is validated as absolute path
+  
+  return {
+    content: [{ type: 'text', text: `Reading ${filename} from ${project}` }],
+    isError: false
+  };
 });
+```
 
-if (!result.success) {
-  console.log('Errors:', result.errors);
+### Handle MCP Sessions
+
+```typescript
+import { McpSession } from 'flowmcp';
+
+// Create session per request
+function handleRequest(requestData) {
+  const session = new McpSession();
+  
+  // Use throwError for critical failures that should stop execution
+  if (requestData.invalid) {
+    session.throwError({
+      code: 'CRITICAL_ERROR', 
+      message: 'Operation failed',
+      context: { reason: 'invalid input' }
+    });
+    // This line never executes - throwError stops execution
+  }
+  
+  // Generate responses (logger included)
+  return session.getResponse({ success: true, data: 'result' });
 }
 ```
 
-### Error and Warning Management
+### Independent Error Logging
 
 ```typescript
 import { Logger } from 'flowmcp';
 
-const manager = new McpManager();
-const response = manager.getResponse({ message: 'Hello, world!' });
+// Logger can be used independently of sessions
+const logger = new Logger();
 
-if (response.success) {
-  console.log('Success:', response.data);
-  if (response.warnings) {
-    console.log('Warnings:', response.warnings);
-  }
-} else {
-  console.log('Errors:', response.errors);
-}
+// Collect and group errors
+logger.addError({ code: 'VALIDATION', message: 'Invalid format' });
+logger.addWarning({ code: 'DEPRECATED', message: 'Old API usage' });
+
+// Get prioritized summary
+const { errors, warnings } = logger.getResponse();
 ```
 
 ## Integration
 
-All registered tools automatically receive a `project` parameter that:
-- Must be an absolute path to the project directory
-- Is validated before tool execution
-- Is added to your tool's schema automatically
+Complete MCP tool workflow:
 
-Your tool handler will receive the validated project path along with your defined parameters.
+```typescript
+import { McpBuilder, McpSession } from 'flowmcp';
+
+const builder = new McpBuilder();
+
+// Build tool with per-request session handling
+builder.addTool({
+  name: 'process_data',
+  description: 'Process project data',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      data: { type: 'string' }
+    }
+  }
+}, async (request) => {
+  // Create session for this request
+  const session = new McpSession();
+  const { project, data } = request.params.arguments;
+  
+  try {
+    // Process with automatic project validation
+    const result = await processData(project, data);
+    return session.getResponse({ success: true, result });
+  } catch (error) {
+    // Log error for analysis
+    session.logger.addError({ 
+      code: 'PROCESSING_ERROR', 
+      message: error.message,
+      context: { project, data }
+    });
+    
+    // Return error response with logged errors
+    return session.getResponse({ success: false, error: error.message });
+  }
+});
+```
+
+## Modules
+
+- **McpBuilder** - Build and register MCP tools with validation
+- **McpSession** - Handle MCP requests and critical error management  
+- **Logger** - Independent error/warning collection and analysis
 
 ## Requirements
 
 - Node.js 18+
 - TypeScript project (recommended)
+- MCP-compatible environment
 
 ## License
 

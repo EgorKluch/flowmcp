@@ -1,0 +1,78 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+```yaml
+$meta:
+  name: 'mcpSessionModule'
+  goal: 'mcpSessionManagementAndCriticalErrors'
+  domain: 'mcp.session.handling'
+  apply: 'mcpSessionModule'
+  version: 1.0
+  purpose: "Define McpSession module responsibility for MCP request session handling and critical error management"
+  domains: ['mcp.session.handling', 'error.critical.management', 'response.generation.mcp']
+
+module:
+  purpose: "Handle MCP request sessions with critical error management and response generation"
+  
+  responsibility:
+    primary: "Manage MCP session lifecycle and handle critical errors that require immediate attention"
+    scope: "Session-level error handling, critical error throwing, response generation"
+    criticality: "Handles errors that should stop execution and require immediate intervention"
+    
+  publicAPI:
+    constructor: "new McpSession(opts?: McpSession.Opts)"
+    methods:
+      throwError: "throwError(error: McpSession.Error): never - Throw critical error and stop execution"
+      getResponse: "getResponse<TData>(data: TData): McpSession.Response<TData>"
+    
+    types:
+      Error: "{ message: string; code: string; context?: unknown }"
+      Response: "SuccessResponse<TData> | ErrorResponse<TData>"
+      McpInterruptError: "Critical error class that extends Error"
+      
+  behavior:
+    criticalErrorHandling: "Throws McpInterruptError for critical failures that must stop execution"
+    errorLogging: "Logs all critical errors through integrated Logger before throwing"
+    responseGeneration: "Creates properly formatted success/error responses"
+    sessionManagement: "Manages error state within MCP request session context"
+    
+  workflows:
+    criticalErrorHandling:
+      - "Receive error with code, message, and context"
+      - "Log error through Logger for tracking"
+      - "Create McpInterruptError with error details"
+      - "Throw error to stop execution immediately"
+      
+    responseGeneration:
+      - "Receive data for response creation"
+      - "Get errors and warnings from Logger"
+      - "Determine success/failure based on error presence"
+      - "Format response with data, errors, and warnings"
+      - "Return typed response object"
+      
+    sessionLifecycle:
+      - "Initialize session with Logger"
+      - "Handle operations with error tracking"
+      - "Collect non-critical errors and warnings"
+      - "Throw critical errors when encountered"
+      - "Generate final response with accumulated state"
+      
+  dependencies:
+    external: []
+    internal: ['Logger']
+    relationship: "Uses Logger for error collection, complements McpBuilder for full MCP workflow"
+    
+  integration:
+    usage: "Used alongside McpBuilder for complete MCP tool workflow"
+    compatibility: "Integrates with MCP protocol error handling patterns"
+    workflow: "Handles session-level concerns while McpBuilder handles tool-level concerns"
+    
+  errorTypes:
+    McpInterruptError: "Critical error that stops execution"
+    characteristics:
+      - "Extends standard Error class"
+      - "Contains code, message, and context"
+      - "Indicates unrecoverable session failure"
+      - "Should be caught at session boundary"

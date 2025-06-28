@@ -1,6 +1,6 @@
 {
   "name": "flowmcp",
-  "version": "1.1.0",
+  "version": "2.0.0",
   "description": "Powerful toolkit for MCP (Model Context Protocol) tools and automated workflow processes",
   "type": "module",
   "main": "dist/index.js",
@@ -33,7 +33,7 @@
     "toolkit",
     "typescript"
   ],
-  "author": "",
+  "author": "Egor Kliuchantsev",
   "license": "MIT",
   "engines": {
     "node": ">=18.0.0"
@@ -43,7 +43,6 @@
   },
   "devDependencies": {
     "@types/jest": "^29.5.0",
-    "@types/json-schema": "^7.0.15",
     "@types/node": "^20.0.0",
     "jest": "^29.7.0",
     "ts-jest": "^29.1.0",
