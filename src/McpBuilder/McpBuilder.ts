@@ -7,9 +7,9 @@ import type {
   ListToolsRequest,
   ListToolsResult
 } from '@modelcontextprotocol/sdk/types.js';
-import { 
-  ListToolsRequestSchema, 
-  CallToolRequestSchema 
+import {
+  ListToolsRequestSchema,
+  CallToolRequestSchema
 } from '@modelcontextprotocol/sdk/types.js';
 import type { Server } from '@modelcontextprotocol/sdk/server/index.js';
 
@@ -41,32 +41,32 @@ export enum McpToolErrorCode {
 
 export declare namespace McpBuilder {
   type Opts = {};
-  
+
   type Error = {
     message?: string;
     code: string;
     context?: unknown;
   };
-  
+
   type Warning = {
     message?: string;
     code: string;
     context?: unknown;
   };
-  
+
   type SuccessResponse<TData> = {
     success: true;
     data: TData;
     warnings?: McpBuilder.Warning[];
   };
-  
+
   type ErrorResponse<TData> = {
     success: false;
     data: TData;
     errors: McpBuilder.Error[];
     warnings?: McpBuilder.Warning[];
   };
-  
+
   type Response<TData> = SuccessResponse<TData> | ErrorResponse<TData>;
 
   // Tool-related types moved from tools.ts
@@ -106,7 +106,7 @@ export declare namespace McpBuilder {
   };
 
   type SchemaWithProject<T extends JSONSchema = JSONSchema> = T & {
-    properties: T extends { properties: infer P } 
+    properties: T extends { properties: infer P }
       ? P & ProjectSchema['properties']
       : ProjectSchema['properties'];
     required: T extends { required: infer R }
@@ -129,7 +129,7 @@ export class McpBuilder {
   constructor(_opts: McpBuilder.Opts = {}) {
     this.logger = new Logger();
   }
-  
+
   /**
    * Add a new MCP tool with automatic schema extension for project parameter
    * @param tool - The tool definition with user's input schema
@@ -154,7 +154,7 @@ export class McpBuilder {
 
       // Extend user's schema with project parameter
       const extendedTool = this.extendToolWithProject(tool);
-      
+
       // Create enhanced handler that validates project parameter
       const enhancedHandler = this.createEnhancedHandler(handler);
 
@@ -175,13 +175,13 @@ export class McpBuilder {
       return this.getResponse(undefined);
     }
   }
-  
+
   /**
    * Extend user's tool schema with required project parameter
    */
   private extendToolWithProject(tool: Tool): McpBuilder.ExtendedTool {
     const inputSchema = tool.inputSchema as JSONSchema;
-    
+
     // Create base project schema
     const projectSchema: McpBuilder.ProjectSchema = {
       type: 'object',
@@ -194,6 +194,9 @@ export class McpBuilder {
       required: ['project']
     };
 
+    // Get existing required fields, exclude 'project' if already present to avoid duplication
+    const existingRequired = (inputSchema?.required || []).filter(field => field !== 'project');
+
     // Merge schemas
     const extendedSchema: McpBuilder.ExtendedToolInputSchema = {
       type: 'object',
@@ -203,7 +206,7 @@ export class McpBuilder {
       },
       required: [
         ...projectSchema.required,
-        ...(inputSchema?.required || [])
+        ...existingRequired
       ],
       additionalProperties: inputSchema?.additionalProperties ?? false
     };
@@ -216,27 +219,30 @@ export class McpBuilder {
 
   /**
    * Create enhanced handler that validates project parameter
+   * FIXED: Proper error handling without using throwError in return statement
    */
   private createEnhancedHandler(originalHandler: McpBuilder.ToolHandler): McpBuilder.ToolHandler {
     return async (session: McpSession, request: CallToolRequest): Promise<CallToolResult> => {
       const args = request.params.arguments || {};
-      
+
       // Validate project parameter
       if (!args.project || typeof args.project !== 'string') {
-        session.throwError({
+        session.logger.addError({
           code: McpToolErrorCode.MISSING_PROJECT_PARAMETER,
           message: 'Project parameter is required and must be a non-empty string',
           context: { providedArgs: args }
         });
+        return session.getResult({});
       }
 
       // Basic validation that project is an absolute path
       if (!args.project.startsWith('/') && !args.project.match(/^[A-Za-z]:[\\\/]/)) {
-        session.throwError({
+        session.logger.addError({
           code: McpToolErrorCode.INVALID_PROJECT_PATH,
           message: 'Project parameter must be an absolute path',
           context: { providedProject: args.project }
         });
+        return session.getResult({});
       }
 
       // Call original handler with validated arguments
@@ -287,17 +293,17 @@ export class McpBuilder {
 
   /**
    * Apply registered tools to MCP Server by setting up request handlers
-   * @param server - MCP Server instance
+   * FIXED: Proper error handling in CallTool handler
    */
   applyToServer(server: Server): void {
     // Set up ListTools handler
     server.setRequestHandler(ListToolsRequestSchema, async (_request: ListToolsRequest): Promise<ListToolsResult> => {
       const tools: Tool[] = [];
-      
+
       for (const registration of this.registeredTools.values()) {
         tools.push(registration.tool);
       }
-      
+
       return { tools };
     });
 
@@ -305,39 +311,41 @@ export class McpBuilder {
     server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest): Promise<CallToolResult> => {
       const session = new McpSession();
       const toolName = request.params.name;
-      
+
       try {
         const registration = this.registeredTools.get(toolName);
-        
+
         if (!registration) {
-          return session.throwError({
+          // FIXED: Don't return throwError, use proper error handling
+          session.logger.addError({
             code: McpToolErrorCode.TOOL_NOT_FOUND,
             message: `Tool '${toolName}' not found`,
             context: { availableTools: Array.from(this.registeredTools.keys()) }
           });
+          return session.getResult({});
         }
-        
+
         return await registration.handler(session, request);
       } catch (error) {
         // Handle McpInterruptError properly - the response is already a CallToolResult
         if (error instanceof McpInterruptError) {
           return error.response;
         }
-        
+
         // Handle other errors through session
         session.logger.addError({
           code: McpToolErrorCode.TOOL_EXECUTION_ERROR,
           message: `Error executing tool '${toolName}': ${error instanceof Error ? error.message : String(error)}`,
         });
-        
+
         return session.getResult({});
       }
     });
   }
-  
+
   getResponse<TData>(data: TData): McpBuilder.Response<TData> {
     const { errors, warnings } = this.logger.getResponse();
-    
+
     if (errors.length > 0) {
       return {
         success: false,
@@ -346,11 +354,11 @@ export class McpBuilder {
         ...(warnings.length > 0 && { warnings })
       };
     }
-    
+
     return {
       success: true,
       data,
       ...(warnings.length > 0 && { warnings })
     };
   }
-} 
+}
