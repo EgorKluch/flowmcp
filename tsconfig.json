@@ -15,7 +15,6 @@
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
     "isolatedModules": true,
-    "noEmitOnError": true,
     "incremental": true,
     "exactOptionalPropertyTypes": true,
     "noImplicitReturns": true,
