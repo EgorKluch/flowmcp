@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0]
+
+### Changed
+- **BREAKING**: Package renamed from `mcp-manager` to `flowmcp`
+- Enhanced description to reflect future workflow and process automation capabilities
+- Updated keywords to include workflow, processes, scenarios, and automation
+
+### Migration Guide
+- Update your imports: `import { McpManager } from 'flowmcp'` (instead of 'mcp-manager')
+- Update package.json dependency: `"flowmcp": "^1.1.0"`
+
 ## [1.0.0]
 
 ### Added

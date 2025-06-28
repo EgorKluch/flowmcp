@@ -1,11 +1,11 @@
-# MCP Manager
+# FlowMCP
 
-A development toolkit for creating and managing MCP (Model Context Protocol) tools with automatic project path validation.
+A powerful toolkit for MCP (Model Context Protocol) tools and automated workflow processes. Streamline your development with intelligent tool management and process automation.
 
 ## Installation
 
 ```bash
-npm install mcp-manager
+npm install flowmcp
 ```
 
 ## Key Features
@@ -13,6 +13,7 @@ npm install mcp-manager
 - **Tool Management** - Register and manage MCP tools with automatic schema validation
 - **Project Path Validation** - Automatic project parameter injection and validation for all tools  
 - **Error Handling** - Built-in error and warning management with automatic grouping
+- **Process Ready** - Built with future workflow and scenario automation in mind
 - **TypeScript Support** - Full TypeScript definitions included
 
 ## Basic Usage
@@ -20,7 +21,7 @@ npm install mcp-manager
 ### Register MCP Tools
 
 ```typescript
-import { McpManager } from 'mcp-manager';
+import { McpManager } from 'flowmcp';
 
 const manager = new McpManager();
 
@@ -54,7 +55,7 @@ if (!result.success) {
 ### Error and Warning Management
 
 ```typescript
-import { Logger } from 'mcp-manager';
+import { Logger } from 'flowmcp';
 
 const manager = new McpManager();
 const response = manager.getResponse({ message: 'Hello, world!' });
