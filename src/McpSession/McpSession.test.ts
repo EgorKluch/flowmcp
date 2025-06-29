@@ -1,4 +1,5 @@
-import { McpSession, McpInterruptError } from './McpSession';
+import { McpSession } from './McpSession';
+import { Logger } from '../Logger/index.js';
 
 describe('McpSession', () => {
   let session: McpSession;
@@ -15,59 +16,6 @@ describe('McpSession', () => {
     it('should accept empty options', () => {
       const sessionWithOpts = new McpSession({});
       expect(sessionWithOpts.logger).toBeDefined();
-    });
-  });
-
-  describe('throwError', () => {
-    it('should throw McpInterruptError', () => {
-      const error: McpSession.Error = {
-        code: 'CRITICAL_ERROR',
-        message: 'Critical error occurred'
-      };
-
-      expect(() => session.throwError(error)).toThrow(McpInterruptError);
-    });
-
-    it('should include error in response', () => {
-      const error: McpSession.Error = {
-        code: 'CRITICAL_ERROR',
-        message: 'Critical error occurred',
-        context: { detail: 'test context' }
-      };
-
-      try {
-        session.throwError(error);
-      } catch (thrownError) {
-        expect(thrownError).toBeInstanceOf(McpInterruptError);
-        const mcpError = thrownError as McpInterruptError;
-        expect(mcpError.response.isError).toBe(true);
-        expect(mcpError.response.content[0].type).toBe('text');
-        const content = JSON.parse(mcpError.response.content[0].text as string);
-        expect(content.success).toBe(false);
-        expect(content.data.criticalError).toEqual(error);
-      }
-    });
-
-    it('should have proper error message', () => {
-      const error: McpSession.Error = {
-        code: 'TEST_ERROR',
-        message: 'Test error'
-      };
-
-      expect(() => session.throwError(error)).toThrow('MCP request interrupted');
-    });
-
-    it('should have isMcpInterrupt flag', () => {
-      const error: McpSession.Error = {
-        code: 'TEST_ERROR',
-        message: 'Test error'
-      };
-
-      try {
-        session.throwError(error);
-      } catch (thrownError) {
-        expect((thrownError as McpInterruptError).isMcpInterrupt).toBe(true);
-      }
     });
   });
 
@@ -181,7 +129,7 @@ describe('McpSession', () => {
 
   describe('logger integration', () => {
     it('should use logger for errors', () => {
-      const error: McpSession.Error = {
+      const error: Logger.Error = {
         code: 'TEST_ERROR',
         message: 'Test error',
         context: { key: 'value' }
@@ -199,7 +147,7 @@ describe('McpSession', () => {
     });
 
     it('should use logger for warnings', () => {
-      const warning: McpSession.Warning = {
+      const warning: Logger.Warning = {
         code: 'TEST_WARNING',
         message: 'Test warning',
         context: { info: 'additional info' }
@@ -246,41 +194,21 @@ describe('McpSession', () => {
     });
   });
 
-  describe('McpInterruptError class', () => {
-    it('should have correct name and properties', () => {
-      const mockResponse = { isError: true, content: [{ type: 'text', text: '{}' }] };
-      const error = new McpInterruptError(mockResponse);
-
-      expect(error.name).toBe('McpInterruptError');
-      expect(error.message).toBe('MCP request interrupted');
-      expect(error.isMcpInterrupt).toBe(true);
-      expect(error.response).toBe(mockResponse);
-    });
-
-    it('should be instance of Error', () => {
-      const mockResponse = { isError: true, content: [{ type: 'text', text: '{}' }] };
-      const error = new McpInterruptError(mockResponse);
-
-      expect(error).toBeInstanceOf(Error);
-      expect(error).toBeInstanceOf(McpInterruptError);
-    });
-  });
-
   describe('error context handling', () => {
     it('should handle errors with various context types', () => {
-      const errorWithStringContext: McpSession.Error = {
+      const errorWithStringContext: Logger.Error = {
         code: 'STRING_CONTEXT',
         message: 'Error with string context',
         context: 'simple string'
       };
 
-      const errorWithObjectContext: McpSession.Error = {
+      const errorWithObjectContext: Logger.Error = {
         code: 'OBJECT_CONTEXT',
         message: 'Error with object context',
         context: { complex: { nested: 'value' }, array: [1, 2, 3] }
       };
 
-      const errorWithNumberContext: McpSession.Error = {
+      const errorWithNumberContext: Logger.Error = {
         code: 'NUMBER_CONTEXT',
         message: 'Error with number context',
         context: 42
@@ -304,7 +232,7 @@ describe('McpSession', () => {
     });
 
     it('should handle errors without context', () => {
-      const errorWithoutContext: McpSession.Error = {
+      const errorWithoutContext: Logger.Error = {
         code: 'NO_CONTEXT',
         message: 'Error without context'
         // no context field

@@ -1,5 +1,5 @@
 import { Logger } from "../Logger/index.js";
-import { McpSession, McpInterruptError } from "../McpSession/index.js";
+import { McpSession } from "../McpSession/index.js";
 import type {
   Tool,
   CallToolRequest,
@@ -327,11 +327,6 @@ export class McpBuilder {
 
         return await registration.handler(session, request);
       } catch (error) {
-        // Handle McpInterruptError properly - the response is already a CallToolResult
-        if (error instanceof McpInterruptError) {
-          return error.response;
-        }
-
         // Handle other errors through session
         session.logger.addError({
           code: McpToolErrorCode.TOOL_EXECUTION_ERROR,

@@ -222,6 +222,70 @@ describe('Logger', () => {
     });
   });
 
+  describe('new granular methods', () => {
+    beforeEach(() => {
+      logger.addError({ code: 'E001', message: 'Test error', context: 'test-context' });
+      logger.addError({ code: 'E001', message: 'Test error', context: 'another-context' });
+      logger.addWarning({ code: 'W001', message: 'Test warning', context: 'warning-context' });
+    });
+
+    describe('hasError', () => {
+      it('should return true for existing error code', () => {
+        expect(logger.hasError('E001')).toBe(true);
+      });
+
+      it('should return false for non-existing error code', () => {
+        expect(logger.hasError('E999')).toBe(false);
+      });
+    });
+
+    describe('hasWarning', () => {
+      it('should return true for existing warning code', () => {
+        expect(logger.hasWarning('W001')).toBe(true);
+      });
+
+      it('should return false for non-existing warning code', () => {
+        expect(logger.hasWarning('W999')).toBe(false);
+      });
+    });
+
+    describe('getError', () => {
+      it('should return error group for existing error code', () => {
+        const errorGroup = logger.getError('E001');
+        
+        expect(errorGroup).toBeDefined();
+        expect(errorGroup?.amount).toBe(2);
+        expect(errorGroup?.errors).toHaveLength(1);
+        expect(errorGroup?.errors[0].message).toBe('Test error');
+        expect(errorGroup?.errors[0].contexts).toHaveLength(2);
+      });
+
+      it('should return undefined for non-existing error code', () => {
+        const errorGroup = logger.getError('E999');
+        
+        expect(errorGroup).toBeUndefined();
+      });
+    });
+
+    describe('getWarning', () => {
+      it('should return warning group for existing warning code', () => {
+        const warningGroup = logger.getWarning('W001');
+        
+        expect(warningGroup).toBeDefined();
+        expect(warningGroup?.amount).toBe(1);
+        expect(warningGroup?.warnings).toHaveLength(1);
+        expect(warningGroup?.warnings[0].message).toBe('Test warning');
+        expect(warningGroup?.warnings[0].contexts).toHaveLength(1);
+      });
+
+      it('should return undefined for non-existing warning code', () => {
+        const warningGroup = logger.getWarning('W999');
+        
+        expect(warningGroup).toBeUndefined();
+      });
+    });
+  });
+
   describe('edge cases', () => {
     it('should handle complex object contexts for errors', () => {
       const complexContext = { 

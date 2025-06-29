@@ -12,12 +12,12 @@ type GroupedWarning = {
 
 type ErrorGroup = {
   amount: number;
-  contexts: { context: unknown; amount: number }[];
+  errors: GroupedError[];
 };
 
 type WarningGroup = {
   amount: number;
-  contexts: { context: unknown; amount: number }[];
+  warnings: GroupedWarning[];
 };
 
 export declare namespace Logger {
@@ -57,18 +57,28 @@ export class Logger {
     if (!this.errors[code]) {
       this.errors[code] = {
         amount: 0,
-        contexts: []
+        errors: []
       };
     }
 
     const errorGroup = this.errors[code];
     
+    // Find existing error with same message
+    let existingError = errorGroup.errors.find(e => e.message === message);
+    if (!existingError) {
+      existingError = {
+        ...(message !== undefined && { message }),
+        contexts: []
+      };
+      errorGroup.errors.push(existingError);
+    }
+
     if (context != null) {
-      const existingContext = errorGroup.contexts.find(c => c.context === context);
+      const existingContext = existingError.contexts.find(c => c.context === context);
       if (existingContext) {
         existingContext.amount++;
       } else {
-        errorGroup.contexts.push({ context, amount: 1 });
+        existingError.contexts.push({ context, amount: 1 });
       }
     }
     
@@ -81,18 +91,28 @@ export class Logger {
     if (!this.warnings[code]) {
       this.warnings[code] = { 
         amount: 0, 
-        contexts: [] 
+        warnings: [] 
       };
     }
 
     const warningGroup = this.warnings[code];
     
+    // Find existing warning with same message
+    let existingWarning = warningGroup.warnings.find(w => w.message === message);
+    if (!existingWarning) {
+      existingWarning = {
+        ...(message !== undefined && { message }),
+        contexts: []
+      };
+      warningGroup.warnings.push(existingWarning);
+    }
+    
     if (context != null) {
-      const existingContext = warningGroup.contexts.find(c => c.context === context);
+      const existingContext = existingWarning.contexts.find(c => c.context === context);
       if (existingContext) {
         existingContext.amount++;
       } else {
-        warningGroup.contexts.push({ context, amount: 1 });
+        existingWarning.contexts.push({ context, amount: 1 });
       }
     }
     
@@ -109,43 +129,71 @@ export class Logger {
     };
   }
 
+  hasError(name: string): boolean {
+    return this.errors[name] !== undefined;
+  }
+
+  hasWarning(name: string): boolean {
+    return this.warnings[name] !== undefined;
+  }
+
+  getError(name: string): ErrorGroup | undefined {
+    return this.errors[name];
+  }
+
+  getWarning(name: string): WarningGroup | undefined {
+    return this.warnings[name];
+  }
+
   private getTopErrors() {
     const allErrors: Array<{ message?: string; code: string; amount: number; contexts: unknown[] }> = [];
     
     for (const [code, errorGroup] of Object.entries(this.errors)) {
-      allErrors.push({
-        code,
-        amount: errorGroup.amount,
-        contexts: errorGroup.contexts
-          .sort((a, b) => b.amount - a.amount)
-          .slice(0, 10)
-          .map(c => c.context)
-      });
+      for (const error of errorGroup.errors) {
+        const errorWithOptionalMessage: { message?: string; code: string; amount: number; contexts: unknown[] } = {
+          code,
+          amount: error.contexts.reduce((sum, ctx) => sum + ctx.amount, 0),
+          contexts: error.contexts
+            .sort((a, b) => b.amount - a.amount)
+            .slice(0, 10)
+            .map(c => c.context)
+        };
+        if (error.message !== undefined) {
+          errorWithOptionalMessage.message = error.message;
+        }
+        allErrors.push(errorWithOptionalMessage);
+      }
     }
     
     return allErrors
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 10)
-      .map(({ code, contexts }) => ({ code, contexts }));
+      .map(({ code, message, contexts }) => ({ code, ...(message !== undefined && { message }), contexts }));
   }
 
   private getTopWarnings() {
     const allWarnings: Array<{ message?: string; code: string; amount: number; contexts: unknown[] }> = [];
     
     for (const [code, warningGroup] of Object.entries(this.warnings)) {
-      allWarnings.push({
-        code,
-        amount: warningGroup.amount,
-        contexts: warningGroup.contexts
-          .sort((a, b) => b.amount - a.amount)
-          .slice(0, 10)
-          .map(c => c.context)
-      });
+      for (const warning of warningGroup.warnings) {
+        const warningWithOptionalMessage: { message?: string; code: string; amount: number; contexts: unknown[] } = {
+          code,
+          amount: warning.contexts.reduce((sum, ctx) => sum + ctx.amount, 0),
+          contexts: warning.contexts
+            .sort((a, b) => b.amount - a.amount)
+            .slice(0, 10)
+            .map(c => c.context)
+        };
+        if (warning.message !== undefined) {
+          warningWithOptionalMessage.message = warning.message;
+        }
+        allWarnings.push(warningWithOptionalMessage);
+      }
     }
     
     return allWarnings
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 10)
-      .map(({ code, contexts }) => ({ code, contexts }));
+      .map(({ code, message, contexts }) => ({ code, ...(message !== undefined && { message }), contexts }));
   }
 } 

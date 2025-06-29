@@ -9,21 +9,21 @@ $meta:
   goal: 'comprehensiveMcpToolkitGuidance'
   domain: 'mcp.toolkit.usage'
   apply: 'mcpProjectsUsingFlowmcp'
-  version: 2.1.0
+  version: 2.1.1
   purpose: "Complete guidance for using FlowMCP toolkit in MCP projects without source code access"
   domains: ['mcp.toolkit.usage', 'development.workflow.automation', 'protocol.integration.patterns']
 
 # === FLOWMCP LIBRARY OVERVIEW ===
 flowmcp:
   description: "Powerful toolkit for building MCP (Model Context Protocol) tools with automatic validation, error handling, and project path management"
-  version: "2.1.0"
+  version: "2.1.1"
   installation: "npm install flowmcp"
   repository: "https://github.com/EgorKluch/flowmcp.git"
   
   keyFeatures:
     - "Automatic project parameter injection for all MCP tools"
     - "Schema validation and extension with project path validation"
-    - "Session-based error handling with critical error management"
+    - "Session-based error handling and response generation"
     - "Independent logging with frequency-based error/warning analysis"
     - "Full TypeScript support with comprehensive type definitions"
     - "MCP Server integration with applyToServer() method"
@@ -69,7 +69,7 @@ modules:
         session: "McpSession instance for error handling and result generation"
         request: "CallToolRequest with guaranteed project parameter"
       projectAccess: "request.params.arguments.project - validated absolute path"
-      errorHandling: "Use session.logger.addError() for non-critical errors, session.throwError() for critical failures"
+      errorHandling: "Use session.logger.addError() to collect errors, return session.getResult({}) for error responses"
       
     automaticProjectParameter:
       description: "Every tool automatically receives project parameter"
@@ -93,14 +93,6 @@ modules:
       logger: "Independent Logger instance for collecting errors and warnings"
       
     methods:
-      throwError:
-        signature: "throwError(criticalError: McpSession.Error): never"
-        purpose: "Handle critical errors that should stop execution immediately"
-        parameters:
-          criticalError: "{ message: string, code: string, context?: unknown }"
-        behavior: "Adds error to logger, generates response, throws McpInterruptError"
-        usage: "For unrecoverable errors that should terminate tool execution"
-        
       getResult:
         signature: "getResult<TData>(data: TData): CallToolResult"
         purpose: "Generate MCP-compliant result with collected errors and warnings"
@@ -109,13 +101,9 @@ modules:
         returns: "CallToolResult with success/error status and formatted content"
         behavior: "Includes all collected errors/warnings from session logger"
         
-    errorTypes:
-      Error: "{ message: string, code: string, context?: unknown }"
-      Warning: "{ message: string, code: string, context?: unknown }"
-      
     errorHandling:
-      nonCritical: "session.logger.addError() - collect errors, continue execution"
-      critical: "session.throwError() - immediate termination with error response"
+      collectErrors: "session.logger.addError() - collect errors, continue execution"
+      errorResponse: "session.getResult({}) - return error response with collected errors"
 
   Logger:
     purpose: "Independent error and warning collection with frequency analysis"
@@ -146,6 +134,34 @@ modules:
         purpose: "Get prioritized summary of collected errors and warnings"
         returns: "{ errors: Error[], warnings: Warning[] }"
         behavior: "Returns top 10 errors and warnings sorted by frequency, max 10 contexts per item"
+        
+      hasError:
+        signature: "hasError(name: string): boolean"
+        purpose: "Check if specific error exists by code"
+        parameters:
+          name: "Error code to check for existence"
+        returns: "true if error with specified code exists, false otherwise"
+        
+      hasWarning:
+        signature: "hasWarning(name: string): boolean"
+        purpose: "Check if specific warning exists by code"
+        parameters:
+          name: "Warning code to check for existence"
+        returns: "true if warning with specified code exists, false otherwise"
+        
+      getError:
+        signature: "getError(name: string): ErrorGroup | undefined"
+        purpose: "Get specific error by code as-is from internal structure"
+        parameters:
+          name: "Error code to retrieve"
+        returns: "ErrorGroup with amount and contexts, or undefined if not found"
+        
+      getWarning:
+        signature: "getWarning(name: string): WarningGroup | undefined"
+        purpose: "Get specific warning by code as-is from internal structure"
+        parameters:
+          name: "Warning code to retrieve"
+        returns: "WarningGroup with amount and contexts, or undefined if not found"
         
     frequencyAnalysis:
       grouping: "Errors and warnings grouped by code and message"
@@ -194,7 +210,7 @@ patterns:
       builder.applyToServer(server);
       
   errorHandlingPatterns:
-    nonCriticalErrors:
+    collectingErrors:
       description: "Collect errors but continue execution"
       code: |
         // Collect multiple errors, continue processing
@@ -209,17 +225,17 @@ patterns:
         // Process continues, errors included in final result
         return session.getResult({ processedData });
         
-    criticalErrors:
-      description: "Stop execution immediately on critical failure"
+    errorResponses:
+      description: "Return error response for failed operations"
       code: |
-        // Critical error - stops execution immediately
+        // Add error and return error response
         if (projectNotFound) {
-          session.throwError({
+          session.logger.addError({
             code: 'PROJECT_NOT_FOUND',
             message: 'Project directory does not exist',
             context: { project: projectPath }
           });
-          // This line never executes
+          return session.getResult({});
         }
         
     warningCollection:
@@ -246,6 +262,17 @@ patterns:
       
       // Get prioritized summary
       const { errors, warnings } = logger.getResponse();
+      
+      // Check for specific errors/warnings
+      if (logger.hasError('VALIDATION')) {
+        const validationError = logger.getError('VALIDATION');
+        console.log(`Validation errors occurred ${validationError.amount} times`);
+      }
+      
+      if (logger.hasWarning('PERFORMANCE')) {
+        const performanceWarning = logger.getWarning('PERFORMANCE');
+        console.log(`Performance warnings: ${performanceWarning.contexts.length} contexts`);
+      }
       
   serverIntegration:
     description: "Complete MCP server setup with FlowMCP"
@@ -292,23 +319,15 @@ types:
   McpBuilder:
     ToolHandler: "(session: McpSession, request: CallToolRequest) => Promise<CallToolResult>"
     Response: "SuccessResponse<TData> | ErrorResponse<TData>"
-    Error: "{ message?: string, code: string, context?: unknown }"
-    Warning: "{ message?: string, code: string, context?: unknown }"
-    
   McpSession:
-    Error: "{ message?: string, code: string, context?: unknown }"
-    Warning: "{ message?: string, code: string, context?: unknown }"
+    Opts: "Configuration options for McpSession constructor"
     
   Logger:
     Error: "{ message?: string, code: string, context?: unknown }"
     Warning: "{ message?: string, code: string, context?: unknown }"
     Response: "{ errors: ResponseError[], warnings: ResponseWarning[] }"
     
-  McpInterruptError:
-    description: "Special error thrown by session.throwError() to interrupt execution"
-    properties:
-      isMcpInterrupt: "true - identifier property"
-      response: "Generated CallToolResult with error details"
+
 
 # === BEST PRACTICES ===
 bestPractices:
@@ -325,8 +344,8 @@ bestPractices:
     contextUniqueness: "Context should not duplicate information from message or code"
     groupingByCode: "Errors and warnings are grouped by code, not by message"
     errorUtilities: "Create utility functions for common error patterns to ensure consistency"
-    criticality: "Reserve session.throwError() for truly critical failures"
-    recovery: "Use session.logger.addError() for recoverable issues"
+    errorResponses: "Use session.logger.addError() followed by session.getResult({}) for error conditions"
+    errorCollection: "Use session.logger for consistent error collection and reporting"
     
   projectParameter:
     validation: "Always validate project path exists before use"
@@ -339,6 +358,10 @@ bestPractices:
     context: "Use context to pass meaningful debugging information, not duplicate data"
     grouping: "All errors/warnings with same code are grouped together regardless of message"
     utilities: "Use helper functions for consistent error creation across application"
+    granularAccess: "Use hasError/hasWarning to check existence, getError/getWarning to access specific error groups"
+    specificDebugging: "Use specific error access methods (getError/getWarning) for detailed analysis and debugging"
+    conditionalHandling: "Check specific errors with hasError(code) before handling them differently"
+    errorInspection: "Use getError(code) to access full error details including frequency and contexts"
     
   performance:
     sessionReuse: "Don't create new sessions unnecessarily - use provided session"
@@ -372,9 +395,9 @@ troubleshooting:
       issue: "TOOL_ALREADY_EXISTS error when adding tools"
       solution: "Use unique tool names, check for accidental duplicate registrations"
       
-    criticalErrorHandling:
-      issue: "McpInterruptError not caught properly"
-      solution: "Critical errors from session.throwError() should not be caught - they terminate execution"
+    errorHandling:
+      issue: "Error responses not properly formatted"
+      solution: "Use session.logger.addError() followed by return session.getResult({}) for error conditions"
       
   debugging:
     errorContext: "Check error context objects for detailed debugging information"

@@ -1,5 +1,5 @@
 import { McpBuilder, McpToolErrorCode } from './McpBuilder';
-import { McpSession, McpInterruptError } from '../McpSession/index.js';
+import { McpSession } from '../McpSession/index.js';
 import type { Tool, CallToolRequest, CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 
@@ -238,7 +238,10 @@ describe('McpBuilder', () => {
         }
       };
 
-      await expect(enhancedHandler?.(session, request)).rejects.toThrow(McpInterruptError);
+      const result = await enhancedHandler?.(session, request);
+      expect(result?.isError).toBe(true);
+      const content = JSON.parse(result?.content[0].text as string);
+      expect(content.success).toBe(false);
     });
 
     it('should reject relative paths', async () => {
@@ -257,7 +260,10 @@ describe('McpBuilder', () => {
         }
       };
 
-      await expect(enhancedHandler?.(session, request)).rejects.toThrow(McpInterruptError);
+      const result = await enhancedHandler?.(session, request);
+      expect(result?.isError).toBe(true);
+      const content = JSON.parse(result?.content[0].text as string);
+      expect(content.success).toBe(false);
     });
 
     it('should accept Unix absolute paths', async () => {
@@ -316,7 +322,10 @@ describe('McpBuilder', () => {
         }
       };
 
-      await expect(enhancedHandler?.(session, request)).rejects.toThrow(McpInterruptError);
+      const result = await enhancedHandler?.(session, request);
+      expect(result?.isError).toBe(true);
+      const content = JSON.parse(result?.content[0].text as string);
+      expect(content.success).toBe(false);
     });
 
     it('should reject non-string project parameter', async () => {
@@ -335,7 +344,10 @@ describe('McpBuilder', () => {
         }
       };
 
-      await expect(enhancedHandler?.(session, request)).rejects.toThrow(McpInterruptError);
+      const result = await enhancedHandler?.(session, request);
+      expect(result?.isError).toBe(true);
+      const content = JSON.parse(result?.content[0].text as string);
+      expect(content.success).toBe(false);
     });
 
     it('should handle missing arguments object', async () => {
@@ -351,7 +363,10 @@ describe('McpBuilder', () => {
         }
       };
 
-      await expect(enhancedHandler?.(session, request)).rejects.toThrow(McpInterruptError);
+      const result = await enhancedHandler?.(session, request);
+      expect(result?.isError).toBe(true);
+      const content = JSON.parse(result?.content[0].text as string);
+      expect(content.success).toBe(false);
     });
   });
 
@@ -671,18 +686,19 @@ describe('McpBuilder', () => {
       expect(result.content[0].text).toContain('Error executing tool');
     });
 
-    it('should handle McpInterruptError properly', async () => {
-      const interruptTool: Tool = {
-        name: 'interrupt-tool',
-        description: 'Tool that throws McpInterruptError',
+    it('should handle tools that add errors to session', async () => {
+      const errorTool: Tool = {
+        name: 'error-tool',
+        description: 'Tool that adds errors to session',
         inputSchema: { type: 'object', properties: {} }
       };
 
-      builder.addTool(interruptTool, async (session: McpSession) => {
-        session.throwError({
+      builder.addTool(errorTool, async (session: McpSession) => {
+        session.logger.addError({
           code: McpToolErrorCode.INVALID_PROJECT_PATH,
           message: 'Direct MCP error'
         });
+        return session.getResult({});
       });
       builder.applyToServer(mockServer);
 
@@ -690,7 +706,7 @@ describe('McpBuilder', () => {
       const request: CallToolRequest = {
         method: 'tools/call',
         params: {
-          name: 'interrupt-tool',
+          name: 'error-tool',
           arguments: { project: '/path' }
         }
       };

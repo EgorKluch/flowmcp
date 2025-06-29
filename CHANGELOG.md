@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.1]
+
+### Added
+- **Logger.hasError(name: string)** method to check if specific error exists by code
+- **Logger.hasWarning(name: string)** method to check if specific warning exists by code
+- **Logger.getError(name: string)** method to get specific error by code as-is
+- **Logger.getWarning(name: string)** method to get specific warning by code as-is
+
+### Changed
+- Logger methods now provide granular access to specific errors and warnings by name/code
+- Enhanced error and warning inspection capabilities for better debugging
+- Achieved 100% test coverage across all modules (Logger, McpBuilder, McpSession)
+
+### Removed
+- **BREAKING**: `McpSession.throwError()` method removed for security reasons
+- **BREAKING**: `McpInterruptError` class completely removed
+- **BREAKING**: `McpSession.Error` and `McpSession.Warning` types removed (use `Logger.Error` and `Logger.Warning` instead)
+
+### Migration Guide
+- **Error Handling**: Replace `session.throwError({ code, message, context })` with `session.logger.addError({ code, message, context })` followed by `return session.getResult({})`
+- **Error Types**: Replace `McpSession.Error` and `McpSession.Warning` with `Logger.Error` and `Logger.Warning`
+- **Error Inspection**: Use new `session.logger.hasError(code)` and `session.logger.getError(code)` methods for specific error checking
+
 ## [2.1.0]
 
 ### Added
